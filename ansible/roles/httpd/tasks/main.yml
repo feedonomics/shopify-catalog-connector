@@ -1,0 +1,45 @@
+---
+
+- name: Check public ip
+  shell: curl http://ipecho.net/plain
+  register: public_host
+  ignore_errors: true
+
+- name: Place httpd.conf
+  template:
+    src: '../templates/httpd.conf.j2'
+    dest: /etc/httpd/conf/httpd.conf
+
+- name: Ensure httpd is running
+  systemd:
+    state: started
+    enabled: yes
+    name: httpd
+  tags: httpd
+
+- name: Create SSL cert
+  shell: "certbot --quiet --noninteractive --agree-tos --email '{{httpd.ssl_email}}' --webroot -w {{httpd.document_root}} certonly -d '{{inventory_hostname}}'"
+  when: httpd.ssl
+
+- name: Enable SSL
+  template:
+    src: '../templates/ssl.conf.j2'
+    dest: '/etc/httpd/conf.d/ssl.conf'
+  tags: httpd
+  when: httpd.ssl
+
+- cron:
+    user: apache
+    name: "renew cert"
+    job: 'certbot renew --quiet --post-hook "apachectl graceful"'
+    minute: "10"
+    hour: "22"
+    disabled: true
+  when: httpd.ssl
+
+- name: Restart httpd after SSL is done being setup
+  systemd:
+    state: restarted
+    name: httpd
+    enabled: yes
+  when: httpd.ssl

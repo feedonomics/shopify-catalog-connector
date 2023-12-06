@@ -1,0 +1,52 @@
+---
+
+- name: Clone shopify-connector repo
+  git:
+    repo: "git@github.com:feedonomics/shopify-connector.git"
+    dest: "{{git.repo_dest}}"
+    ssh_opts: -o StrictHostKeyChecking=no
+    accept_hostkey: yes
+    version: master
+    clone: yes
+    update: yes
+
+- name: Create required directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0777
+  with_items:
+    - "{{httpd.document_root}}"
+    - "{{git.repo_dest}}/tmp"
+    - "{{git.repo_dest}}/config"
+    - "/var/log/shopify-connector/logs/errors"
+
+- name: Create error log file
+  file:
+    path: "/var/log/shopify-connector/logs/errors/errors"
+    state: touch
+    mode: '00666'
+
+- name: Install common config files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: '{{base_path}}/files/config/file_paths.php', dest: '{{git.repo_dest}}/config/file_paths.php' }
+
+- name: Install templated config files
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: "{{base_path}}/files/config/db_credentials.php.j2", dest: '{{git.repo_dest}}/config/db_credentials.php'}
+
+- name: Create temporary_tables db
+  mysql_db:
+    login_user: "root"
+    login_password: "{{db_password}}"
+    login_host: "localhost"
+    name: "temporary_tables"
+    collation: utf8_unicode_ci
+    encoding: utf8
+    state: present

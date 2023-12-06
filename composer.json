@@ -1,0 +1,26 @@
+{
+	"name": "feedonomics/shopify-connector",
+	"description": "The Shopify Connector is an open-source project to assist with extracting product listing information from Shopify in a flexible and configurable manner.",
+	"version": "1.0.0",
+	"require": {
+		"php": "^8.2",
+		"ext-json": "*",
+		"ext-mysqli": "*",
+		"ext-curl": "*",
+		"ext-zip": "*",
+		"ext-pcntl": "*",
+		"ext-openssl": "*",
+		"guzzlehttp/guzzle": "~6.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"ShopifyConnector\\": "lib",
+			"ShopifyConnector\\web\\": "public_html",
+			"ShopifyConnector\\cli\\": "cli"
+		},
+		"files": [
+			"config/db_credentials.php",
+			"config/file_paths.php"
+		]
+	}
+}

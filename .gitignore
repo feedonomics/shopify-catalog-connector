@@ -1,0 +1,5 @@
+*.sw[pon]
+tmp/
+config/*.php
+vendor/**/.git
+.idea/*

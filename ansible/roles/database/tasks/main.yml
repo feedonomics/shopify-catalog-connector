@@ -1,0 +1,94 @@
+---
+
+- name: Get the latest version of the official repo
+  ansible.builtin.yum_repository:
+    state: present
+    enabled: true
+    name: MariaDB
+    description: Maria DB official repo
+    baseurl: https://rpm.mariadb.org/10.6/rhel/$releasever/$basearch
+    gpgkey: https://rpm.mariadb.org/RPM-GPG-KEY-MariaDB
+    gpgcheck: 1
+
+- name: Install MariaDB
+  yum:
+    name:
+      - mariadb
+      - mariadb-server
+      - MySQL-python
+    state: present
+
+- name: Create mysql directories
+  file: 
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: mysql
+    group: mysql
+  with_items:
+    "/var/www/tmp"
+
+- name: Create /etc/systemd/system/mariadb.service.d
+  file:
+    path: /etc/systemd/system/mariadb.service.d
+    state: directory
+
+- name: Make mariadb limits.conf
+  synchronize:
+    src: "{{base_path}}/files/mariadb/limits.conf"
+    dest: "/etc/systemd/system/mariadb.service.d/limits.conf"
+
+- name: Grab MySQL my.cnf
+  template:
+    src: "{{base_path}}/files/mariadb/my.cnf"
+    dest: /etc/my.cnf
+
+- name: Systemd re-read configs
+  systemd:
+    daemon-reload: yes
+
+- name: Start MySQL
+  systemd:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: check if DB exists
+  shell: mysql -e 'SHOW DATABASES;'
+  register: dbresult
+  ignore_errors: yes
+  changed_when: false
+
+- name: Run MySQL Setup, anonymous user accounts
+  mysql_user:
+    name: ''
+    host: localhost
+    state: absent
+  when: dbresult.rc == 0
+
+- name: Remove non-local root accounts
+  command: >
+    mysql --execute="DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1')"
+  when: dbresult.rc == 0
+
+- name: Drop test database
+  mysql_db:
+    name: test
+    state: absent
+  when: dbresult.rc == 0
+
+- name: Set root password
+  mysql_user:
+    check_implicit_admin: yes
+    login_user: "root"
+    login_password: "{{db_password}}"
+    login_host: "localhost"
+    host: "{{item}}"
+    name: root
+    password: "{{db_password}}"
+    priv: "*.*:ALL,GRANT"
+    state: present
+  when: dbresult.rc == 0
+  ignore_errors: yes
+  with_items:
+    - "localhost"

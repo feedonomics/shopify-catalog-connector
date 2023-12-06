@@ -1,0 +1,21 @@
+---
+
+- name: Playbook for deploying the Shopify connector service
+  hosts: shopify_connector
+  tasks:
+
+    - name: Generate DB password
+      set_fact:
+        db_password: "{{ lookup('password', '/dev/null chars=hexdigits length=32') }}"
+        run_once: yes
+
+    - include_role:
+        name: common
+    - include_role:
+        name: database
+    - include_role:
+        name: php
+    - include_role:
+        name: shopify-connector
+    - include_role:
+        name: httpd

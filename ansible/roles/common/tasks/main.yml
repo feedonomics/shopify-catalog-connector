@@ -1,0 +1,76 @@
+---
+
+- name: General Yum Update
+  yum:
+    name: "*"
+    state: latest
+
+- name: Install epel-release
+  yum:
+    name: epel-release
+    state: present
+
+- name: Install IUS release package
+  yum:
+    name: "https://repo.ius.io/ius-release-el7.rpm"
+    state: present
+
+- name: GPG Key for IUS
+  rpm_key:
+    state: present
+    key: https://repo.ius.io/RPM-GPG-KEY-IUS-7
+
+- name: Enable ius-archive
+  yum_repository:
+    name: ius-archive
+    description: IUS ius-archive
+    baseurl: https://repo.ius.io/archive/7/x86_64/
+    enabled: yes
+    gpgcheck: yes
+
+- name: Yum Installs
+  yum:
+    name:
+      - rsync
+      - vim
+      - wget
+      - zip
+      - unzip
+      - ntp
+      - telnet
+      - gcc
+      - gcc-c++
+      - make
+      - openssl-devel
+      - python-pip
+      - python-setuptools
+      - python-devel
+      - git
+      - file
+      - httpd-2.4.6
+      - awscli
+      - certbot
+      - mod_ssl
+      - tmpwatch
+      - iperf
+    state: present
+
+- name: Grab php.ini
+  synchronize:
+    src: "{{base_path}}/files/php/php.ini"
+    dest: /etc/
+
+- name: Set timezone
+  timezone:
+    name: America/New_York
+
+- name: Enable and start ntpd
+  systemd:
+    name: ntpd
+    enabled: yes
+    state: started
+
+- name: Grab limits.conf
+  synchronize:
+    src: "{{base_path}}/files/centos/limits.conf"
+    dest: /etc/security/
