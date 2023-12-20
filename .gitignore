@@ -1,5 +1,6 @@
 *.sw[pon]
-tmp/
+tmp/*
+!tmp/.gitkeep
 config/*.php
 vendor/**/.git
 .idea/*

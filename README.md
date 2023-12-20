@@ -3,10 +3,17 @@
 ## Description
 The Shopify Connector is an open-source project to assist with extracting product listing information from Shopify in a flexible and configurable manner. This will pull information from a Shopify store using a combination of the Rest API and Graphql, and will output that data into a singular CSV.
 
-## Requirements
+## Software Requirements
 The Shopify connector has the following requirements:
-- PHP 7.4
-- MariaDB 5.5
+- PHP 8.2
+- MariaDB 10.x or higher
+
+## Hardware Requirements
+Due to the multi-threaded nature of this repo, multiple servers are recommended to absorb request loads to maximize availability and reduce potential downtime. A setup of one load balancer with two worker servers is a good starting point. The load balancer is recommended to be equivalent to an AWS `t3a.xlarge` and the worker servers are recommended to be equivalent to an AWS `c5.4xlarge`.
+
+## Security Considerations
+- Ensure all communication is over SSL, as this repo deals with communicating sensitive info such as API tokens.
+- The database only deals with on-demand tables for per-request processing and does not need to be web-accessible, therefore only local connections should be allowed and a secure password should be used.
 
 ## Setup
 Ansible files are provided for seamless deployment. Before running the provided playbook, please review `./ansible/inventories/shopify-connector.inv.yml` for required setup variables. Once the inventory is set up, the playbook can be run without any extra steps:
@@ -17,7 +24,7 @@ ansible-playbook -i inventories/shopify-connector.inv.yml playbooks/shopify-conn
 ```
 
 ## Flags
-The following flags can be provided as query params when calling the Shopify connector to pull data in different ways:
+The following flags can be provided when calling the Shopify connector to pull data in different ways:
 
 - `file_info[request_type]` _Required_ `string` The request type. Options are `get` to pull the product catalog or `list` to fetch summary information about the shop.
 - `connection_info[client]` _Required_ `string` This should always be 'shopify'
@@ -71,16 +78,7 @@ $query_params = http_build_query([
     ],
 ]);
 
-$curl = curl_init();
-$fh = fopen('/tmp/output.csv.gz', 'w+');
-
-curl_setopt_array($curl, [
-  CURLOPT_URL => 'https://shopify-connector.example?' . $query_params,
-  CURLOPT_RETURNTRANSFER => true,
-  CURLOPT_FILE => $fh,
-]);
-
-$response = curl_exec($curl);
+$curl = curl_init('https://shopify-connector.example?' . $query_params);
+curl_exec($curl);
 curl_close($curl);
-fclose($fh);
 ```

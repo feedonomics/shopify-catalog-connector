@@ -1,0 +1,12 @@
+<?php
+/*
+ * This is an example of the file paths config. This file should be
+ * copied in this same directory without the `.example` extension and shouldn't
+ * need any additional configuration unless explicitly desired.
+ */
+
+$GLOBALS['file_paths']['base_path'] = __DIR__ . "/../";
+$GLOBALS['file_paths']['lib_path'] = $GLOBALS['file_paths']['base_path'] . '/lib';
+$GLOBALS['file_paths']['config_path'] = $GLOBALS['file_paths']['base_path'] . '/config';
+$GLOBALS['file_paths']['tmp_path'] = $GLOBALS['file_paths']['base_path'] . '/tmp';
+$GLOBALS['file_paths']['log_path'] = '/var/log/shopify-connector/logs/errors';
