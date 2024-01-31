@@ -4,6 +4,7 @@ namespace ShopifyConnector\connectors;
 
 use ShopifyConnector\exceptions\ValidationException;
 use ShopifyConnector\exceptions\file\UnableToOpenFileException;
+use ShopifyConnector\exceptions\file\UnableToWriteFileException;
 use ShopifyConnector\util\File_Utilities;
 use ShopifyConnector\util\file\TemporaryFile;
 use ShopifyConnector\util\file\TemporaryFileGenerator;
@@ -206,6 +207,36 @@ abstract class BaseConnector {
 		}
 
 		$fpath = $file->get_absolute_path();
+		if ($this->file_info['output_compressed']) {
+			$output_file = TemporaryFileGenerator::get('gzip_', 'gz');
+			$fp_out = @gzopen($output_file->get_absolute_path(), 'wb1');
+			if ($fp_out === false) {
+				throw new UnableToOpenFileException();
+			}
+
+			// Open file to compress, read in 512kb blocks
+			$fp_in = @fopen($file->get_absolute_path(), 'rb');
+			if ($fp_in === false) {
+				gzclose($fp_out);
+				throw new UnableToOpenFileException();
+			}
+
+			while ($block = fread($fp_in, 1024 * 512)) {
+				$gzreturn = gzwrite($fp_out, $block);
+				if($gzreturn === false){
+					break;
+				}
+			}
+
+			$success = feof($fp_in) && ($gzreturn !== false);
+			fclose($fp_in);
+			gzclose($fp_out);
+
+			if(!$success){
+				throw new UnableToWriteFileException();
+			}
+			$fpath = $output_file->get_absolute_path();
+		}
 		$fsize = filesize($fpath);
 		if($fsize !== false && !headers_sent()){
 			# TODO: Error or silently skip?
@@ -252,11 +283,11 @@ abstract class BaseConnector {
 		switch($this->file_info['request_type'] ?? 'get'){
 			case 'get':
 				$this->output_file($this->pull_data());
-			break;
+				break;
 
 			case 'list':
 				$this->get_api_info();
-			break;
+				break;
 
 			default:
 				throw new ValidationException('Invalid request type specified');

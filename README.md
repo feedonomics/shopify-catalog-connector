@@ -27,6 +27,7 @@ ansible-playbook -i inventories/shopify-connector.inv.yml playbooks/shopify-conn
 The following flags can be provided when calling the Shopify connector to pull data in different ways:
 
 - `file_info[request_type]` _Required_ `string` The request type. Options are `get` to pull the product catalog or `list` to fetch summary information about the shop.
+- `file_info[output_compressed]` _Optional_ `bool` Return file as gzip file. Defaults to `false`.
 - `connection_info[client]` _Required_ `string` This should always be 'shopify'
 - `connection_info[protocol]` _Required_ `string` This should always be 'api'
 - `connection_info[oauth_token]` _Required_ `string` The OAuth token to use with API requests
@@ -55,6 +56,7 @@ The following flags can be provided when calling the Shopify connector to pull d
 $query_params = http_build_query([
     'file_info' => [
         'request_type' => 'get',
+        'output_compressed' => true
     ],
     'connection_info' => [
       'client' => 'shopify',
