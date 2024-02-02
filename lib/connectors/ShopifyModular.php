@@ -1355,7 +1355,7 @@ class ShopifyModular extends BaseConnector {
 						if (!array_key_exists($parent_metafield_name, $this->template->get_template())){
 							$this->template->append_keyless_to_template([$parent_metafield_name]);
 							$clean_parent_metafield_name = $local_cxn->strip_enclosure_characters($parent_metafield_name);
-							$alter_col_qry = "ALTER TABLE `{$this->tables['main']}` ADD `{$clean_parent_metafield_name}` TEXT;";
+							$alter_col_qry = "ALTER TABLE `{$this->tables['main']}` ADD `{$clean_parent_metafield_name}` LONGTEXT;";
 							$result = $local_cxn->query($alter_col_qry);
 							if(!$result) {
 								$this->write_log("There was a MySQl Error: {$local_cxn->error}" . PHP_EOL, true);
@@ -1391,7 +1391,7 @@ class ShopifyModular extends BaseConnector {
 							if (!array_key_exists($variant_metafield_name, $this->template->get_template())){
 								$this->template->append_keyless_to_template([$variant_metafield_name]);
 								$clean_variant_metafield_name = $local_cxn->strip_enclosure_characters($variant_metafield_name);
-								$alter_col_qry = "ALTER TABLE `{$this->tables['main']}` ADD `{$clean_variant_metafield_name}` TEXT;";
+								$alter_col_qry = "ALTER TABLE `{$this->tables['main']}` ADD `{$clean_variant_metafield_name}` LONGTEXT;";
 								$result = $local_cxn->query($alter_col_qry);
 								if(!$result) {
 									$this->write_log("There was a MySQl Error: {$local_cxn->error}" . PHP_EOL, true);
