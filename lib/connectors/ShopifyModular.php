@@ -1224,7 +1224,14 @@ class ShopifyModular extends BaseConnector {
 			} else {
 				$color_identifier = sprintf('color-%s', strtolower($this->get_option($product, $variant, 'color')));
 				$color_identifier_2 = strtolower($this->get_option($product, $variant, 'color'));
-				if (stripos(strtolower($image['alt']), $color_identifier) !== false || stripos(strtolower($image['alt']), $color_identifier_2) !== false ) {
+				if (
+					!empty($color_identifier_2)
+					&& !empty($image['alt'])
+					&& (
+						stripos(strtolower($image['alt']), $color_identifier) !== false
+						|| stripos(strtolower($image['alt']), $color_identifier_2) !== false
+					)
+				) {
 					$image_links[] = $image['src'];
 				}
 			}
