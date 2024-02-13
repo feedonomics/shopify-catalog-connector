@@ -17,6 +17,7 @@ class ApiException extends Exception {
 			'message' => $msg,
 			'data'    => $data,
 		]));
+		$this->data = $data;
 	}
 
 	public function getDecodedData() : array {
