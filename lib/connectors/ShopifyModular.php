@@ -1003,7 +1003,9 @@ class ShopifyModular extends BaseConnector {
 				if (isset($child_response['error']) && !$this->error_thrown) {
 					$this->error_thrown = true;
 					$child_error = json_decode($child_response['error'], true);
-					throw new ApiResponseException($child_error['display_message']);
+					throw new ApiResponseException(
+            $child_error['display_message'] ?? $child_response['error']
+          );
 				}
 
 				if($this->connection_info['variant_names_split_columns'] && !empty($child_response['variant_names'])){
