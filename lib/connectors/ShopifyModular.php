@@ -1309,7 +1309,7 @@ class ShopifyModular extends BaseConnector {
 				$shopify_error_data = $shopify_error['data'] ?? [];
 				$status = $shopify_error_data['status'] ?? -1;
 				$new_tier = $this->rest_settings['current_tier'][$limit_type] + 1;
-				$error_message = $shopify_error['message'] ?? '';
+				$error_message = $shopify_error['message'] ?? $e->getMessage();
 				if (
 					(
 						!in_array($status, [500,502,503]) //We want to retry these status codes
