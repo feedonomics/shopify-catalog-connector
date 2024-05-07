@@ -422,7 +422,7 @@ class ShopifyModular extends BaseConnector {
 		}
 
 		foreach ($this->template->get_template() as $header_field) {
-			$type = 'TEXT';
+			$type = 'MEDIUMTEXT';
 			if (in_array($header_field, ['inventory_item_id', 'item_group_id', 'id'])) {
 				if ($header_field === 'id') {
 					$keys = 'PRIMARY KEY (id)';
@@ -434,9 +434,6 @@ class ShopifyModular extends BaseConnector {
 					}
 				}
 				$type = 'BIGINT(4)';
-			}
-			if (in_array($header_field, ['smart_collections_meta', 'custom_collections_meta', 'product_meta', 'variant_meta'])) {
-				$type = 'MEDIUMTEXT';
 			}
 			$header_field = $local_cxn->strip_enclosure_characters($header_field);
 			$fields .= "`{$header_field}` {$type},";
