@@ -181,6 +181,7 @@ class ShopifyModular extends BaseConnector {
 		$connection_info['variant_names_split_columns'] = InputParser::extract_boolean($connection_info, 'variant_names_split_columns');
 		$connection_info['inventory_level_explode']	= InputParser::extract_boolean($connection_info, 'inventory_level_explode');
 		$connection_info['include_presentment_prices']	= InputParser::extract_boolean($connection_info, 'include_presentment_prices', true);
+		$connection_info['use_metafield_namespaces']	= InputParser::extract_boolean($connection_info, 'use_metafield_namespaces', false);
 		$connection_info['extra_parent_fields']	= trim($connection_info['extra_parent_fields'] ?? '');
 		if ($connection_info['extra_parent_fields']  != ''){
 			$connection_info['extra_parent_fields'] = array_flip(explode(',', $connection_info['extra_parent_fields']));
@@ -962,7 +963,7 @@ class ShopifyModular extends BaseConnector {
 									$comma_fields = rtrim($comma_fields, ',');
 									$comma_values = rtrim($comma_values, ',');
 									$on_duplicate = rtrim($on_duplicate, ',');
-									$qry = "INSERT INTO `{$this->tables['main']}` ({$comma_fields}) VALUES ({$comma_values}) ON DUPLICATE KEY UPDATE {$on_duplicate};";
+									$qry = "INSERT IGNORE INTO `{$this->tables['main']}` ({$comma_fields}) VALUES ({$comma_values}) ON DUPLICATE KEY UPDATE {$on_duplicate};";
 									$insert_result = $local_cxn->query($qry);
 									if (!$insert_result) {
 										$this->write_log($local_cxn->error . PHP_EOL, true);
@@ -999,10 +1000,7 @@ class ShopifyModular extends BaseConnector {
 
 				if (isset($child_response['error']) && !$this->error_thrown) {
 					$this->error_thrown = true;
-					$child_error = json_decode($child_response['error'], true);
-					throw new ApiResponseException(
-						$child_error['display_message'] ?? $child_response['error']
-					);
+					throw new ApiResponseException($child_response['error']);
 				}
 
 				if($this->connection_info['variant_names_split_columns'] && !empty($child_response['variant_names'])){
@@ -1191,7 +1189,7 @@ class ShopifyModular extends BaseConnector {
 				}
 			} else {
 				$color_identifier = sprintf('color-%s', strtolower($this->get_option($product, $variant, 'color')));
-				if (stripos($image['alt'], $color_identifier) !== false) {
+				if (stripos($image['alt'] ?? '', $color_identifier) !== false) {
 					$image_links[] = $image['src'];
 				}
 			}
@@ -1350,14 +1348,20 @@ class ShopifyModular extends BaseConnector {
 				if ($this->connection_info['metafields_split_columns']){
 					$parent_meta = [];
 					foreach($product_meta as $metafield){
-						$parent_metafield_name = "parent_meta_" . str_replace('-', '_', strtolower($metafield['key']));
+						if ($this->connection_info['use_metafield_namespaces']) {
+							$parent_metafield_name = "parent_meta_" . $metafield['namespace'] . "_" . str_replace('-', '_', strtolower($metafield['key']));
+						} else {
+							$parent_metafield_name = "parent_meta_" . str_replace('-', '_', strtolower($metafield['key']));
+						}
 						// make sure the metafield key isn't messy
 						$parent_metafield_name = $this->clean_column_name($parent_metafield_name);
+
 						$parent_meta[$parent_metafield_name] = json_encode([
 							'value'			=> $metafield['value'],
 							'namespace'		=> $metafield['namespace'],
 							'description'	=> $metafield['description'],
 						]);
+
 						if (!array_key_exists($parent_metafield_name, $this->template->get_template())){
 							$this->template->append_keyless_to_template([$parent_metafield_name]);
 							$clean_parent_metafield_name = $local_cxn->strip_enclosure_characters($parent_metafield_name);
@@ -1387,8 +1391,15 @@ class ShopifyModular extends BaseConnector {
 					if ($this->connection_info['metafields_split_columns']){
 						$variant_product_meta = [];
 						foreach($variant_meta as $metafield){
-							$variant_metafield_name = "variant_meta_" . str_replace('-', '_', strtolower($metafield['key']));
+							// Generate the base variant metafield name
+							if ($this->connection_info['use_metafield_namespaces']) {
+								$variant_metafield_name = "variant_meta_" . $metafield['namespace'] . "_" . str_replace('-', '_', strtolower($metafield['key']));
+							} else {
+								$variant_metafield_name = "variant_meta_" . str_replace('-', '_', strtolower($metafield['key']));
+							}
+							// make sure the metafield key isn't messy
 							$variant_metafield_name = $this->clean_column_name($variant_metafield_name);
+
 							$variant_product_meta[$variant_metafield_name] = json_encode([
 								'value'			=> $metafield['value'],
 								'namespace'		=> $metafield['namespace'],
@@ -1425,7 +1436,7 @@ class ShopifyModular extends BaseConnector {
 							}
 							$cleaned_dupe_update_fields = trim($cleaned_dupe_update_fields, ', ');
 
-							$metafields_insert_query = "INSERT INTO `{$this->tables['main']}` (id, item_group_id {$clean_metafield_keys}) VALUES ({$clean_id}, {$clean_product_id} {$clean_metafield_values}) ON DUPLICATE KEY UPDATE {$cleaned_dupe_update_fields}";
+							$metafields_insert_query = "INSERT IGNORE INTO `{$this->tables['main']}` (id, item_group_id {$clean_metafield_keys}) VALUES ({$clean_id}, {$clean_product_id} {$clean_metafield_values}) ON DUPLICATE KEY UPDATE {$cleaned_dupe_update_fields}";
 							$result = $local_cxn->query($metafields_insert_query);
 
 							if(!$result) {
@@ -1437,7 +1448,7 @@ class ShopifyModular extends BaseConnector {
 						}
 
 					} else {
-						$result = $local_cxn->query("INSERT INTO `{$this->tables['main']}` (id, item_group_id, variant_meta, product_meta) VALUES ({$clean_id}, {$clean_product_id}, '{$clean_variant_meta}', '{$clean_product_meta}') ON DUPLICATE KEY UPDATE product_meta='{$clean_product_meta}', variant_meta='{$clean_variant_meta}'");
+						$result = $local_cxn->query("INSERT IGNORE INTO `{$this->tables['main']}` (id, item_group_id, variant_meta, product_meta) VALUES ({$clean_id}, {$clean_product_id}, '{$clean_variant_meta}', '{$clean_product_meta}') ON DUPLICATE KEY UPDATE product_meta='{$clean_product_meta}', variant_meta='{$clean_variant_meta}'");
 						if(!$result) {
 							$this->write_log("There was a MySQl Error: {$local_cxn->error}" . PHP_EOL, true);
 						} else {
@@ -1627,7 +1638,7 @@ class ShopifyModular extends BaseConnector {
 				$field_string = rtrim($field_string, ',');
 				$update_string = rtrim($update_string, ',');
 				if ($insert) {
-					$query = "INSERT INTO `{$this->tables['main']}` (item_group_id, {$field_string}) VALUES ({$product_id},{$value_string}) ON DUPLICATE KEY UPDATE {$update_string}";
+					$query = "INSERT IGNORE INTO `{$this->tables['main']}` (item_group_id, {$field_string}) VALUES ({$product_id},{$value_string}) ON DUPLICATE KEY UPDATE {$update_string}";
 				} else {
 					$query = "UPDATE `{$this->tables['main']}` SET {$update_string} WHERE item_group_id={$product_id}";
 				}
@@ -1692,7 +1703,7 @@ class ShopifyModular extends BaseConnector {
 				$values_string = rtrim($values_string,',');
 
 				$this->write_log("Adding inventory item/levels to variant id: {$clean_id}..." . PHP_EOL);
-				$result = $local_cxn->query("INSERT INTO `{$this->tables['main']}` ({$fields_string}) VALUES ({$values_string}) ON DUPLICATE KEY UPDATE {$update_string};");
+				$result = $local_cxn->query("INSERT IGNORE INTO `{$this->tables['main']}` ({$fields_string}) VALUES ({$values_string}) ON DUPLICATE KEY UPDATE {$update_string};");
 				if (!$result) {
 					$this->write_log("There was a MySQl Error: {$local_cxn->error}" . PHP_EOL, true);
 				} else {
@@ -1981,7 +1992,7 @@ class ShopifyModular extends BaseConnector {
 			foreach ($this->connection_info['extra_options'] as $col) {
 				$col = trim($col);
 				if ($col !== '') {
-					$this->template->append_keyless_to_template(["extra_option_${col}"]);
+					$this->template->append_keyless_to_template(["extra_option_{$col}"]);
 				}
 			}
 
