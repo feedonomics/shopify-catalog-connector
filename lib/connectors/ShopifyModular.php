@@ -1739,6 +1739,7 @@ class ShopifyModular extends BaseConnector {
 				$inventory_level_data = [
 					'inventory_item_id'		=> (int)$inventory_item_id,
 					'location_id'			=> isset($row['location']['id']) ? (int)$this->get_id_info_from_gid($row['location']['id'])['id'] : null,
+					'available'				=> null,
 					'location_name'			=> $row['location']['name'] ?? '',
 				];
 				$inventory_level_data = array_merge($inventory_level_data, $available_quantities);
