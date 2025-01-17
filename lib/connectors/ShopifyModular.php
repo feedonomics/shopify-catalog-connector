@@ -724,7 +724,7 @@ class ShopifyModular extends BaseConnector {
 								edges {
 									node {
 										id
-										quantities(names: ["available", "incoming", "committed", "damaged", "on_hand", "quality_control", "reserved", "safety_stock"]) {
+										quantities(names: ["available"]) {
 											name
 											quantity
 										}
@@ -1730,19 +1730,20 @@ class ShopifyModular extends BaseConnector {
 				$pos = strpos($id_info['id'], '=');
 				$inventory_item_id = substr($id_info['id'],$pos +1) ;
 				$levels = $row['quantities'] ?? [];
-				$available_quantities = null;
+				$available_quantity = null;
 				foreach($levels as $level_node) {
-					$available_quantities[$level_node['name']] = $level_node['quantity'] ?? 0;
+					if (strtolower($level_node['name']) === 'available') {
+						$available_quantity = $level_node['quantity'] ?? 0;
+						break;
+					}
 				}
 				// Make sure at least available is set, since we rely on it.
-				$available_quantities['available'] = $available_quantities['available'] ?? null;
 				$inventory_level_data = [
 					'inventory_item_id'		=> (int)$inventory_item_id,
 					'location_id'			=> isset($row['location']['id']) ? (int)$this->get_id_info_from_gid($row['location']['id'])['id'] : null,
-					'available'				=> null,
+					'available'				=> $available_quantity,
 					'location_name'			=> $row['location']['name'] ?? '',
 				];
-				$inventory_level_data = array_merge($inventory_level_data, $available_quantities);
 				$inventory_levels[$parent_info['id']][] = $inventory_level_data;
 			}
 		}
