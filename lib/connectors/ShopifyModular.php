@@ -724,7 +724,10 @@ class ShopifyModular extends BaseConnector {
 								edges {
 									node {
 										id
-										available
+										quantities(names: ["available", "incoming", "committed", "damaged", "on_hand", "quality_control", "reserved", "safety_stock"]) {
+											name
+											quantity
+										}
 										location {
 											id
 											name
@@ -791,6 +794,12 @@ class ShopifyModular extends BaseConnector {
 							$this->write_log('Waiting for another Bulk Operation to finish before starting the ' . $task . ' (Options: ' . $options_json . ') bulk operation.' . PHP_EOL);
 							sleep($this->bulk_wait);
 							continue;
+						}
+						else {
+							if (isset($decoded_response['data']['bulkOperationRunQuery']['userErrors'][0]['message'])) {
+								fwrite($parent_socket, serialize(['error' => $decoded_response['data']['bulkOperationRunQuery']['userErrors'][0]['message']]) . PHP_EOL);
+								exit;
+							}
 						}
 					}
 					$bulk_id = $decoded_response['data']['bulkOperationRunQuery']['bulkOperation']['id'] ?? '';
@@ -1713,19 +1722,27 @@ class ShopifyModular extends BaseConnector {
 			} else {
 				// This is an Inventory Level
 				$parent_info = $this->get_id_info_from_gid($row['__parentId']);
-					// If the product has not been seen yet, let's add an array for it
-					if (!isset($inventory_levels[$parent_info['id']])) {
-						$inventory_levels[$parent_info['id']] = [];
-					}
-					$id_info = $this->get_id_info_from_gid($row['id']);
-					$pos = strpos($id_info['id'], '=');
-					$inventory_item_id = substr($id_info['id'],$pos +1) ;
-					$inventory_levels[$parent_info['id']][] = [
-						'inventory_item_id'	=> (int)$inventory_item_id,
-						'location_id'				=> isset($row['location']['id']) ? (int)$this->get_id_info_from_gid($row['location']['id'])['id'] : null,
-						'available'					=> (int)$row['available'] ?? null,
-						'location_name'			=> $row['location']['name'] ?? '',
-					];
+				// If the product has not been seen yet, let's add an array for it
+				if (!isset($inventory_levels[$parent_info['id']])) {
+					$inventory_levels[$parent_info['id']] = [];
+				}
+				$id_info = $this->get_id_info_from_gid($row['id']);
+				$pos = strpos($id_info['id'], '=');
+				$inventory_item_id = substr($id_info['id'],$pos +1) ;
+				$levels = $row['quantities'] ?? [];
+				$available_quantities = null;
+				foreach($levels as $level_node) {
+					$available_quantities[$level_node['name']] = $level_node['quantity'] ?? 0;
+				}
+				// Make sure at least available is set, since we rely on it.
+				$available_quantities['available'] = $available_quantities['available'] ?? null;
+				$inventory_level_data = [
+					'inventory_item_id'		=> (int)$inventory_item_id,
+					'location_id'			=> isset($row['location']['id']) ? (int)$this->get_id_info_from_gid($row['location']['id'])['id'] : null,
+					'location_name'			=> $row['location']['name'] ?? '',
+				];
+				$inventory_level_data = array_merge($inventory_level_data, $available_quantities);
+				$inventory_levels[$parent_info['id']][] = $inventory_level_data;
 			}
 		}
 	}
