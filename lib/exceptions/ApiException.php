@@ -13,11 +13,11 @@ class ApiException extends Exception {
 	private array $data;
 
 	public function __construct(string $msg, array $data){
+		$this->data = $data;
 		parent::__construct(json_encode([
 			'message' => $msg,
 			'data'    => $data,
 		]));
-		$this->data = $data;
 	}
 
 	public function getDecodedData() : array {

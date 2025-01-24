@@ -144,6 +144,20 @@ class TableBuilder {
 	}
 
 	/**
+	 * Add a BIGINT column
+	 *
+	 * @param string $name Column name
+	 * @param bool $unsigned Whether the column is an UNSIGNED INT
+	 * @return TableBuilder For chaining
+	 */
+	public function add_col_bigint(string $name, bool $unsigned = true) : TableBuilder
+	{
+		$s_name = $this->cxn->strip_enclosure_characters($name);
+		$this->columns[] = $unsigned ? "`{$s_name}` BIGINT UNSIGNED" : "`{$s_name}` BIGINT";
+		return $this;
+	}
+
+	/**
 	 * Add a TINYINT column
 	 *
 	 * @param string $name Column name

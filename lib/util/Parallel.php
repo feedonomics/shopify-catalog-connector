@@ -288,7 +288,6 @@ class Parallel {
 	 * @param resource $fp A stream to write the string to
 	 * @param string $string The string to write
 	 * @return int The count of characters written to the stream
-	 * TODO Is this even used? Might be able to delete this
 	 */
 	public static function fwrite_stream($fp, $string) {
 		for ($written = 0; $written < strlen($string); $written += $fwrite) {
