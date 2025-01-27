@@ -73,6 +73,20 @@ class BulkProducts extends BulkBase
 		#
 		# The fields in the query below are a starting point, but may not be exactly what
 		# we want ultimately.
+		$extra_parent_fields = '';
+		$extra_variant_fields = '';
+		if ($this->session->settings->extra_parent_fields) {
+			foreach ($this->session->settings->extra_parent_fields as $field) {
+				$extra_parent_fields .= "{$field}\n";
+			}
+			$extra_parent_fields = trim($extra_parent_fields);
+		}
+		if ($this->session->settings->extra_variant_fields) {
+			foreach ($this->session->settings->extra_variant_fields as $field) {
+				$extra_variant_fields .= "{$field}\n";
+			}
+			$extra_variant_fields = trim($extra_variant_fields);
+		}
 
 		$media_filter = '(query: "media_type:IMAGE")';
 		$presentment_prices = '';
@@ -141,7 +155,7 @@ class BulkProducts extends BulkBase
 						title
 						updatedAt
 						vendor
-
+						{$extra_parent_fields}
 						variants {
 							edges {
 								node {
@@ -161,21 +175,6 @@ class BulkProducts extends BulkBase
 									}
 									inventoryItem {
 										id
-										#inventoryLevels {
-										#	edges {
-										#		node {
-										#			id
-										#			location {
-										#				id
-										#				fulfillmentService {
-										#					id
-										#					handle
-										#					inventoryManagement
-										#				}
-										#			}
-										#		}
-										#	}
-										#}
 										measurement {
 											weight {
 												unit
@@ -185,21 +184,10 @@ class BulkProducts extends BulkBase
 										requiresShipping
 										sku
 										tracked
-										#inventoryLevels {
-										#	edges {
-										#		node {
-										#			id
-										#		}
-										#	}
-										#	location {
-										#		id
-										#		fulfillmentService {
-										#			id
-										#			inventoryManagement
-										#			location
-										#		}
-										#	}
-										#}
+									}
+									inventoryManagement
+									fulfillmentService {
+			  							handle
 									}
 									inventoryQuantity
 									inventoryPolicy
@@ -216,6 +204,7 @@ class BulkProducts extends BulkBase
 									taxCode
 									title
 									updatedAt
+									{$extra_variant_fields}
 								}
 							}
 						}
@@ -242,6 +231,7 @@ class BulkProducts extends BulkBase
 		try {
 			$product_data = null;
 			$variant_data = null;
+			$variant_names = [];
 
 			while (!feof($fh)) {
 				$line = $this->checked_read_line($fh);
@@ -316,6 +306,11 @@ class BulkProducts extends BulkBase
 					$variant_data['id'] = $gid->get_id();
 					$variant_data['media'] = [];
 
+					if ($this->session->settings->variant_names_split_columns) {
+						$identifier = 'variant_' . strtolower($variant_data['selectedOptions'][0]['name']);
+						$variant_names[$identifier] = true;
+					}
+
 				} elseif ($gid->is_media()) {
 					if ($product_data === null) {
 						// Encountered a media before a product. This really shouldn't
@@ -357,6 +352,11 @@ class BulkProducts extends BulkBase
 		} finally {
 			fclose($fh);
 		}
+
+		$result->result = array_values(array_unique(array_merge(
+			$result->result,
+			array_keys($variant_names),
+		)));
 	}
 
 }

@@ -175,12 +175,12 @@ class ShopifySettings extends ClientOptionsValidator
 		$this->extra_parent_fields = array_map(
 			fn($field) => trim($field),
 			explode(',', $client_options['extra_parent_fields'] ?? '')
-		);
+		) ?? [];
 
 		$this->extra_variant_fields = array_map(
 			fn($field) => trim($field),
 			explode(',', $client_options['extra_variant_fields'] ?? '')
-		);
+		) ?? [];
 
 		$this->data_types = array_merge(
 			self::get_compat_datatypes($client_options),

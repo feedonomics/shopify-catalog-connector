@@ -38,6 +38,7 @@ class Products implements iModule
 
 	private ?array $output_fields = null;
 
+	private array $variant_names = [];
 
 	public function __construct(SessionContainer $session)
 	{
@@ -60,7 +61,9 @@ class Products implements iModule
 			if ($output_fields === null) {
 				$output_fields = array_merge(
 					Product::get_translated_default_fields(),
-					ProductVariant::get_translated_default_fields()
+					ProductVariant::get_translated_default_fields(),
+					$this->session->settings->extra_parent_fields,
+					$this->session->settings->extra_variant_fields
 				);
 			}
 
@@ -73,9 +76,10 @@ class Products implements iModule
 			}
 
 			if ($this->session->settings->variant_names_split_columns) {
-				$output_fields[] = 'variant_title';
-				$output_fields[] = 'variant_color';
-				$output_fields[] = 'variant_quantity';
+				$output_fields = array_merge(
+					$output_fields,
+					$this->variant_names,
+				);
 				if (($key = array_search('variant_names', $output_fields)) !== false) {
 					unset($output_fields[$key]);
 				}
@@ -100,7 +104,8 @@ class Products implements iModule
 		$insert_variant = new BatchedDataInserter($cxn, $this->get_variant_inserter($cxn, $this->table_variant));
 
 		$puller = new BulkProducts($this->session);
-		$puller->do_bulk_pull($cxn, $insert_product, $insert_variant);
+		$processing_result = $puller->do_bulk_pull($cxn, $insert_product, $insert_variant);
+		$this->variant_names = $processing_result->result;
 	}
 
 	/**
@@ -159,6 +164,11 @@ class Products implements iModule
 
 			$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
 			$variant = new ProductVariant($product, $decoded_data);
+			if ($this->session->settings->variant_names_split_columns) {
+				$identifier = 'variant_' . strtolower($decoded_data['selectedOptions'][0]['name']);
+				$value = $decoded_data['selectedOptions'][0]['value'];
+				$product->add_datum($identifier, $value);
+			}
 
 			// Data probably includes a GID for id, so set the non-GID id as the variant's id
 			$variant->add_datum('id', $row['id']);

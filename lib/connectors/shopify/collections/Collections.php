@@ -42,7 +42,7 @@ class Collections implements iModule
 
 	public function get_output_field_list() : array
 	{
-		return [
+		$output_fields = [
 		# For "collections" requested:
 		   'item_group_id',
 		   'custom_collections_handle',
@@ -56,6 +56,15 @@ class Collections implements iModule
 		   'custom_collections_meta',
 		   'smart_collections_meta',
 		];
+
+		if ($this->session->settings->includes_data_type('collections_meta')) {
+			$output_fields = array_merge($output_fields, [
+				'custom_collections_meta',
+				'smart_collections_meta',
+			]);
+		}
+
+		return $output_fields;
 	}
 
 	/**

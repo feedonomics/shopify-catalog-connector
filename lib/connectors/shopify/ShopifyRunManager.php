@@ -57,11 +57,12 @@ final class ShopifyRunManager
 	 * @var Array<string, class-string<iModule>> List of available modules
 	 */
 	const MODULE_MAP = [
-		'inventories' => inventories\Inventories::class, # Highest precedence: inventories
+		'inventory_item' => inventories\Inventories::class, # Highest precedence: inventories
 		'products' => products\Products::class,
 		'meta' => metafields\Metafields::class,
 		'translations' => translations\Translations::class,
 		'collections' => collections\Collections::class, # Lowest precedence: collections
+		'collections_meta' => collections\Collections::class, # Lowest precedence: collections_meta
 	];
 
 

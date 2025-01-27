@@ -55,6 +55,7 @@ final class ProductVariant extends FieldHaver
 		'inventory_quantity',
 		'inventory_management',
 		'inventory_policy',
+		'fulfillment_service',
 		'sku',
 		'link',
 		'sale_price',
@@ -163,7 +164,10 @@ final class ProductVariant extends FieldHaver
 				return strtolower($this->get('inventoryPolicy', ''));
 				
 			case 'inventory_management':
-				return $this->get('inventoryManagement', '', false);
+				return strtolower($this->get('inventoryManagement', '', false));
+
+			case 'fulfillment_service':
+				return $this->get('fulfillmentService', [], false)['handle'] ?? '';
 
 			case 'link':
 				$domain = SessionContainer::get_active_session()->shop->domain ?? '';
@@ -210,18 +214,9 @@ final class ProductVariant extends FieldHaver
 			case 'variant_names':
 				return $this->generate_variant_names();
 
-			case 'variant_title':
-				return ($this->get('selectedOptions')[0]['name'] === 'Title') ? $this->get('selectedOptions')[0]['value'] : '';
-
-			case 'variant_color':
-				return ($this->get('selectedOptions')[0]['name'] === 'Color') ? $this->get('selectedOptions')[0]['value'] : '';
-
-			case 'variant_quantity':
-				return ($this->get('selectedOptions')[0]['name'] === 'Quantity') ? $this->get('selectedOptions')[0]['value'] : '';
-
 			case 'gmc_transition_id':
 				$ccode = SessionContainer::get_active_session()->shop->country_code ?? 'xxx';
-				$pid = $this->get('product_id', 'xxx', false);
+				$pid = $this->product->get('item_group_id', 'xxx', false);
 				$vid = $this->get('id', 'xxx', false);
 				return "shopify_{$ccode}_{$pid}_{$vid}";
 
@@ -445,8 +440,11 @@ final class ProductVariant extends FieldHaver
 	 */
 	public function get_option_value(string $name) : string
 	{
-		$pos = $this->product->get_option_by_name($name)['position'] ?? null;
-		return ($pos === null) ? '' : $this->get("option{$pos}", '');
+		if ($name === strtolower($this->get('selectedOptions')[0]['name'])) {
+			return $this->get('selectedOptions')[0]['value'];
+		} else {
+			return '';
+		}
 	}
 
 	/**

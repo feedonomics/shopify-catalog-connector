@@ -33,10 +33,11 @@ final class AccessScopes extends PagedREST
 	 */
 	public function __construct(array $scopeList, array $pageLinks)
 	{
-		$this->scopes = array_map(
-			fn($i) => $i['handle'] ?? null,
-			$scopeList
-		);
+		$scopes = [];
+		foreach($scopeList['data']['app']['availableAccessScopes'] as $scope) {
+			$scopes[] = $scope['handle'];
+		}
+		$this->scopes = $scopes;
 
 		$this->setPageInfos($pageLinks);
 	}
