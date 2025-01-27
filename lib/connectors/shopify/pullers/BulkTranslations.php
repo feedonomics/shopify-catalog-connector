@@ -100,7 +100,7 @@ class BulkTranslations extends BulkBase
 		}
 		$result->result = array_values(array_unique(array_merge(
 			$result->result,
-			array_keys($translation_names)
+			array_keys($translation_names ?? [])
 		)));
 	}
 
