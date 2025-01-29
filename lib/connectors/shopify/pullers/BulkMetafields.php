@@ -82,7 +82,6 @@ class BulkMetafields extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
-		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/meta_bulk_copy'); # TODO: Just for debug/dev
 
 		$mf_split = $this->session->settings->metafields_split_columns;
 		$mf_names = [];

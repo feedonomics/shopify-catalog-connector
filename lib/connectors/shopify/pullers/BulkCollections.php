@@ -80,7 +80,6 @@ class BulkCollections extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
-		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/collect_bulk_copy'); # TODO: Just for debug/dev
 		$fh = $this->checked_open_file($filename);
 
 		try {
