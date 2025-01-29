@@ -2,6 +2,10 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
+use ShopifyConnector\connectors\shopify\SessionContainer;
+
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+
 use JsonSerializable;
 
 /**
@@ -10,32 +14,15 @@ use JsonSerializable;
 final class Translation extends FieldHaver implements JsonSerializable
 {
 
-	const TYPE_PRODUCT = 1;
-
-	private int $type;
-
-
 	/**
 	 * Set up a new Translation object with the given data. The "__parentId"
 	 * key will be removed from the data, if present.
 	 *
 	 * @param array $fields The data for the Translation
 	 */
-	public function __construct(array $fields, int $type)
+	public function __construct(array $fields)
 	{
 		parent::__construct($fields);
-
-		$this->type = $type;
-	}
-
-	/**
-	 * Get the tag appropriate to the type of translation this is.
-	 *
-	 * @return string Tag for use in field names
-	 */
-	private function get_type_tag() : string
-	{
-		return '';
 	}
 
 	/**
@@ -49,6 +36,7 @@ final class Translation extends FieldHaver implements JsonSerializable
 	 */
 	public function get_identifiers() : array
 	{
+		$identifiers = [];
 		$translations = $this->get('translations', []);
 		foreach ($translations as $translation) {
 			$translation_locale = $translation['locale'];
@@ -77,16 +65,6 @@ final class Translation extends FieldHaver implements JsonSerializable
 	{
 		return [];
 	}
-
-
-	/**
-	 * @return [] No variant translations
-	 */
-	public function get_variants() : array
-	{
-		return [];
-	}
-
 
 }
 

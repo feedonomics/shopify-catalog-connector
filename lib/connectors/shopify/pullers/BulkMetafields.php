@@ -2,10 +2,13 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
+use ShopifyConnector\connectors\shopify\MetaFilterManager; # TODO: Move under metafields/
+use ShopifyConnector\connectors\shopify\ProductFilterManager;
 use ShopifyConnector\connectors\shopify\metafields\Metafields;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\models\Metafield;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
+
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 
@@ -79,6 +82,8 @@ class BulkMetafields extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
+		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/meta_bulk_copy'); # TODO: Just for debug/dev
+
 		$mf_split = $this->session->settings->metafields_split_columns;
 		$mf_names = [];
 		$fh = $this->checked_open_file($filename);
@@ -91,7 +96,7 @@ class BulkMetafields extends BulkBase
 			$decoded = null;
 
 			while (!feof($fh)) {
-				$line = $this->checked_read_line($fh, self::MAX_METAFIELD_LINE_LENGTH);
+				$line = $this->checked_read_line($fh);
 				if ($line === null) {
 					break;
 				}
@@ -100,6 +105,7 @@ class BulkMetafields extends BulkBase
 				$decoded = json_decode($line, true, 128, JSON_THROW_ON_ERROR);
 
 				if (empty($decoded['id'])) {
+					// TODO: Error? Log something? Aggregate issues into e.g. PullStats? Different behavior?
 					continue;
 				}
 				$gid = new GID($decoded['id']);

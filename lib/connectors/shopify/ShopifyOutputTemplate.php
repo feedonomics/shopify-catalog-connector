@@ -6,7 +6,28 @@ use ShopifyConnector\connectors\shopify\models\ProductVariant;
 use ShopifyConnector\util\io\OutputTemplate;
 
 /**
+ * TODO: This class is meant to go bye bye.
+ *   Leaving it here for the moment in case there's anything worthwhile to reference in it.
+ *
  * Output template for Shopify
+ * <p>
+ * TODO:
+ * - add* methods can take a ShopifySettings if dynamic fields involved
+ * - Need to account for client_options['fields'] ??
+ * - Likely need to account for 'fields' in the product filters
+ * - include tax_rates if requested
+ * <p>
+ * TODO: More fields that may need to be included by prod/var:
+ *   - child_title
+ *   - fulfillment_service
+ *   - gtin
+ *   - inventory_item_id
+ *   - inventory_management
+ *   - inventory_policy
+ *   - inventory_quantity
+ *   - sku
+ *   - weight
+ *   - weight_unit
  */
 final class ShopifyOutputTemplate
 {
@@ -63,6 +84,22 @@ final class ShopifyOutputTemplate
 			'mfSplit' => false,
 		]));
 
+		# TODO: Add in product_meta if requested
+
+		/* TODO: Move logic to somewhere higher up
+				# Extra options set by client
+				foreach(InputParser::extract_array(
+					[ '_' => $settings->get('extra_options') ],
+					'_'
+				) as $opt){
+					if($opt !== ''){
+						# TODO: A different fields map for this?
+						$name = "extra_option_{$opt}";
+						$this->productFields[] = $name;
+					}
+				}
+		*/
+
 		$this->template->append_keyless_to_template($this->productFields);
 	}
 
@@ -117,7 +154,7 @@ final class ShopifyOutputTemplate
 	{
 		$data = array_merge(
 			$var->product->get_output_data(),
-			$var->get_output_data(['domain' => ''])
+			$var->get_output_data(['domain' => 'todo']) # TODO
 		);
 		return $this->template->fill_template($data);
 	}

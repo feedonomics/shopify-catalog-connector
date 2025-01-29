@@ -1,14 +1,16 @@
 <?php
 
 namespace ShopifyConnector\connectors\shopify\traits;
-use Exception;
-use mysqli_result;
-use ShopifyConnector\exceptions\InfrastructureErrorException;
+
 use ShopifyConnector\util\db\MysqliWrapper;
-use ShopifyConnector\util\db\queries\InsertStatement;
 use ShopifyConnector\util\db\TableBuilder;
 use ShopifyConnector\util\db\TableHandle;
 use ShopifyConnector\util\db\TemporaryTableGenerator;
+use ShopifyConnector\util\db\queries\BatchedDataInserter;
+use ShopifyConnector\util\db\queries\InsertStatement;
+use ShopifyConnector\exceptions\InfrastructureErrorException;
+
+use mysqli_result;
 
 /**
  * Common behaviors for modules in a reusable package. If modules do not need to handle
@@ -157,7 +159,6 @@ trait StandardModule
 	 * @param int $last_retrieved_id The id of the last data retrieved prior to this call
 	 * @return mysqli_result The result set from the query
 	 * @throws InfrastructureErrorException
-	 * @throws Exception
 	 */
 	private function query_next_data(MysqliWrapper $cxn, TableHandle $table, int $last_retrieved_id) : mysqli_result
 	{
@@ -182,7 +183,51 @@ trait StandardModule
 		);
 
 		if (!$result) {
-			throw new Exception('Error while running next-data query: ' . $this->get_module_name());
+			# TODO: Better error? Log something? Is mysqli set up to throw instead?
+			throw new \Exception('Error while running next-data query: ' . $this->get_module_name());
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Retrieve the next set of data after the given `$last_retrieved_id` from the
+	 * given variants table.
+	 *
+	 * The result set includes "id", "parent_id", and "data" columns.
+	 *
+	 * @param MysqliWrapper $cxn The database connection to query on
+	 * @param TableHandle $table The variant table to query
+	 * @param int $last_retrieved_id The id of the last data retrieved prior to this call
+	 * @return mysqli_result The result set from the query
+	 * @throws InfrastructureErrorException
+	 */
+	private function query_next_variant_data(MysqliWrapper $cxn, TableHandle $table, int $last_retrieved_id) : mysqli_result
+	{
+		$col_id = self::COLUMN_ID;
+		$col_data = self::COLUMN_DATA;
+		$col_parent_id = self::COLUMN_PARENT_ID;
+		$table_name = $table->get_table_name();
+
+		// The column names come from hardcoded values, thus okay to use
+		// The table name is sanitized by TableHandle, thus okay to use
+		// $last_retrieved_id is typed as an int (and cast where set), thus okay to use
+		$result = $cxn->safe_query(<<<SQL
+			SELECT var.`{$col_id}` AS id, var.`{$col_parent_id}` AS parent_id, var.`{$col_data}` AS data
+			FROM `{$table_name}` var
+			WHERE var.`{$col_id}` = (
+				SELECT tt.`{$col_id}`
+				FROM `{$table_name}` tt
+				WHERE tt.`{$col_id}` > {$last_retrieved_id}
+				ORDER BY tt.`{$col_id}` ASC
+				LIMIT 1
+			)
+			SQL
+		);
+
+		if (!$result) {
+			# TODO: Better error? Log something? Is mysqli set up to throw instead?
+			throw new \Exception('Error while running next-data query: ' . $this->get_module_name());
 		}
 
 		return $result;
@@ -199,7 +244,6 @@ trait StandardModule
 	 * @param int $id The id to query for
 	 * @return mysqli_result The result set from the query
 	 * @throws InfrastructureErrorException
-	 * @throws Exception
 	 */
 	private function query_data_by_id(MysqliWrapper $cxn, TableHandle $table, int $id) : mysqli_result
 	{
@@ -218,7 +262,8 @@ trait StandardModule
 		);
 
 		if (!$result) {
-			throw new Exception('Error while running by-id query: ' . $this->get_module_name());
+			# TODO: Better error? Return empty set and proceed? Log something?
+			throw new \Exception('Error while running by-id query: ' . $this->get_module_name());
 		}
 
 		return $result;
@@ -235,7 +280,6 @@ trait StandardModule
 	 * @param int $parent_id The parent id to query for
 	 * @return mysqli_result The result set from the query
 	 * @throws InfrastructureErrorException
-	 * @throws Exception
 	 */
 	private function query_data_by_parent_id(MysqliWrapper $cxn, TableHandle $table, int $parent_id) : mysqli_result
 	{
@@ -256,7 +300,8 @@ trait StandardModule
 		);
 
 		if (!$result) {
-			throw new Exception('Error while running by-parent-id query: ' . $this->get_module_name());
+			# TODO: Better error? Log something? Is mysqli set up to throw instead?
+			throw new \Exception('Error while running by-parent-id query: ' . $this->get_module_name());
 		}
 
 		return $result;

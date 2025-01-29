@@ -2,9 +2,16 @@
 
 namespace ShopifyConnector\connectors\shopify;
 
+use ShopifyConnector\connectors\shopify\ShopifySettings;
 use ShopifyConnector\connectors\shopify\models\Shop;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
+
+use ShopifyConnector\util\db\TableHandle;
+use ShopifyConnector\exceptions\InfrastructureErrorException;
+
 use ShopifyConnector\api\ApiClient;
+
+use Exception;
 
 /**
  * Container class for the various dependencies, helpers, etc that are used in
@@ -37,7 +44,7 @@ final class SessionContainer
 	public ApiClient $client;
 
 	/**
-	 * @var ?Shop The data for the shop being pulled from
+	 * @var Shop The data for the shop being pulled from
 	 */
 	public ?Shop $shop = null;
 

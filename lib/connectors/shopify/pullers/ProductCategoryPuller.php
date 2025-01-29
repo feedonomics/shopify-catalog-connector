@@ -7,10 +7,10 @@ use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\services\ProductVariantService;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
-use ShopifyConnector\exceptions\ApiResponseException;
-use ShopifyConnector\exceptions\InfrastructureErrorException;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use ShopifyConnector\util\db\ConnectionFactory;
 use ShopifyConnector\util\db\queries\InsertStatement;
+use ShopifyConnector\exceptions\InfrastructureErrorException;
 use JsonException;
 
 /**
@@ -32,6 +32,7 @@ final class ProductCategoryPuller extends ShopifyPuller
 			new PullParams([
 			], [
 				'limit' => 50,
+				# TODO: Get from ProductFilters
 				'published_status' => 'published',
 			])
 		);
@@ -58,7 +59,7 @@ final class ProductCategoryPuller extends ShopifyPuller
 	 * @param InsertStatement $inserter The insert statement to write with
 	 * @param iDataList $variants The list of variant category data
 	 * @param PullStats $stats Pull stats for tracking
-	 * @throws ApiResponseException On invalid API responses
+	 * @throws UnexpectedResponseException On invalid API responses
 	 * @throws InfrastructureErrorException On DB errors
 	 */
 	private function storeCategoryData(
@@ -87,7 +88,10 @@ final class ProductCategoryPuller extends ShopifyPuller
 					'productTaxonomyNode' => json_encode($ptn, JSON_THROW_ON_ERROR),
 				]));
 			} catch(JsonException $e){
-				throw new ApiResponseException('Invalid product taxonomy node. Received: %s' . $ptn);
+				throw new UnexpectedResponseException(
+					'Shopify',
+					'Invalid product taxonomy node. Received: %s' . $ptn
+				);
 			}
 
 			++$stats->variants;

@@ -1,12 +1,16 @@
 <?php
 namespace ShopifyConnector\connectors\shopify\models;
 
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use ShopifyConnector\connectors\shopify\interfaces\iDataList;
 use Generator;
-use ShopifyConnector\exceptions\ApiResponseException;
 
 /**
  * Model for a list of products from a GraphQL API response
+ * <hr>
+ * TODO: Combine this with ProductPile. Have getItems check if dealing with
+ *   a Resource obj and adapt. Have constructor take in an iPager instead of
+ *   currently taking raw page data and using iPagedResponse as a base class.
  */
 final class ProductPileGQL extends PagedGQL implements iDataList
 {
@@ -21,12 +25,12 @@ final class ProductPileGQL extends PagedGQL implements iDataList
 	 *
 	 * @param array|null $nodes The product nodes
 	 * @param array|null $pageInfo The page info
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function __construct(?array $nodes, ?array $pageInfo)
 	{
 		if ($nodes === null || $pageInfo === null) {
-			throw new ApiResponseException(sprintf(
+			throw new UnexpectedResponseException('Shopify', sprintf(
 				'Response did not include requested data:%s%s',
 				$nodes === null ? ' nodes' : '',
 				$pageInfo === null ? ' pageInfo' : ''

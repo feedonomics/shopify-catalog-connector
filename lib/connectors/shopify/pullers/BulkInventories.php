@@ -2,10 +2,12 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
-use ShopifyConnector\connectors\shopify\metafields\Metafields;
+use ShopifyConnector\connectors\shopify\ProductFilterManager;
+use ShopifyConnector\connectors\shopify\inventories\Inventories;
 use ShopifyConnector\connectors\shopify\models\GID;
-use ShopifyConnector\connectors\shopify\models\Metafield;
+use ShopifyConnector\connectors\shopify\models\Inventory;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
+
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 
@@ -16,8 +18,6 @@ class BulkInventories extends BulkBase
 {
 
 	const MAX_INVENTORY_LINE_LENGTH = 250_000;
-
-	const MAX_METAFIELD_LINE_LENGTH = 250000;
 
 	/**
 	 * @inheritDoc
@@ -30,12 +30,15 @@ class BulkInventories extends BulkBase
 		$prod_search_str = $product_filters->get_filters_gql($prod_query_terms, $prod_search_terms);
 		$meta_search_str = $meta_filters->get_filters_gql();
 
-		$levels =  <<<GQL
+		$levels = !$this->session->settings->include_inventory_level ? '' : <<<GQL
 							inventoryLevels {
 								edges {
 									node {
 										id
-										available
+										quantities(names: ["available"]){
+											name
+											quantity
+										}
 										location {
 											id
 											name
@@ -46,10 +49,13 @@ class BulkInventories extends BulkBase
 			GQL;
 
 		return <<<GQL
-			productVariants (query: "published_status:{$this->session->settings->raw_client_options['product_published_status']}") {
+			productVariants (query: "published_status:published") {
 				edges {
 					node {
 						id
+						product {
+							id
+						}
 						inventoryItem {
 							id
 							sku
@@ -72,114 +78,78 @@ class BulkInventories extends BulkBase
 		string $filename,
 		BulkProcessingResult $result,
 		MysqliWrapper $cxn,
-		BatchedDataInserter $insert_product,
+		BatchedDataInserter $_, // Unused, but required
 		BatchedDataInserter $insert_variant
 	) : void
 	{
-		$mf_split = $this->session->settings->metafields_split_columns;
-		$mf_names = [];
+		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/inventory_bulk_copy'); # TODO: Just for debug/dev
+
 		$fh = $this->checked_open_file($filename);
 
 		try {
-			$product_id = null;
-			$variant_id = null;
-			$last_pid_data_added_for = null;
-			$last_vid_data_added_for = null;
-			$decoded = null;
+			$last_variant_data = null;
+			$last_inv_item_id = null;
+			$levels_accumulator = [];
 
 			while (!feof($fh)) {
-				$line = $this->checked_read_line($fh, self::MAX_METAFIELD_LINE_LENGTH);
+				$line = $this->checked_read_line($fh, self::MAX_INVENTORY_LINE_LENGTH);
 				if ($line === null) {
 					break;
 				}
 
-				$previous_decoded = $decoded;
 				$decoded = json_decode($line, true, 128, JSON_THROW_ON_ERROR);
 
 				if (empty($decoded['id'])) {
 					continue;
 				}
+
 				$gid = new GID($decoded['id']);
+				if (isset($decoded['inventoryItem']['id'])) {
+				}
 
-				if ($gid->is_product()) {
-					// Ensure at least one row exists in db for previous product before moving on to next product
-					if ($product_id !== null && $last_pid_data_added_for !== $product_id) {
-						$insert_product->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $product_id->get_id(),
-							Metafields::COLUMN_DATA => '',
-						]);
-					}
+				if ($gid->is_variant()) {
+					if ($last_variant_data !== null) {
+						$inventory_item = [
+							'id' => $last_inv_item_id,
+							'sku' => $last_variant_data['inventoryItem']['sku'] ?? '',
+							'cost' => $last_variant_data['inventoryItem']['unitCost']['amount'] ?? 'null',
+							'currency' => $last_variant_data['inventoryItem']['unitCost']['currencyCode'] ?? 'null',
+						];
 
-					// Ensure at least one row exists in db for previous variant before moving on to next product
-					if ($variant_id !== null && $last_vid_data_added_for !== $variant_id) {
-						$previous_pid = new GID($previous_decoded['__parentId']);
+						$parent_id = new GID($last_variant_data['product']['id']);
 						$insert_variant->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $variant_id->get_id(),
-							Metafields::COLUMN_PARENT_ID => $previous_pid->get_id(),
-							Metafields::COLUMN_DATA => '',
+							Inventories::COLUMN_ID => $gid->get_id(),
+							Inventories::COLUMN_PARENT_ID => $parent_id->get_id(),
+							Inventories::COLUMN_DATA => json_encode([
+								'item' => $inventory_item,
+								'levels' => $levels_accumulator,
+							])
 						]);
 					}
 
-					$variant_id = null;
-					$product_id = $gid;
+					// Advance last-trackers to this new variant and clear levels accumulator
+					$last_variant_data = $decoded;
+					$last_inv_item_id = (new GID($decoded['inventoryItem']['id']))->get_id();
+					$levels_accumulator = [];
 
-				} elseif ($gid->is_variant()) {
-					if ($product_id === null) {
-						// Encountered a variant before a product. This really shouldn't
-						// happen, so would indicate something pretty weird is going on
-						$this->generic_exception(
-							'Unexpected format in bulk metafields response (v); declining to continue',
-							'processing'
-						);
+				} elseif ($gid->is_inventory_level()) {
+					$loc_id = $decoded['location']['id'] ?? null;
+					$loc_id = $loc_id === null ? null : (new GID($loc_id))->get_id();
+
+					$quantity = null;
+					foreach($decoded['quantities'] ?? [] as $q){
+						if(strtolower($q['name']) === 'available'){
+							$quantity = $q['quantity'] ?? 0;
+							break;
+						}
 					}
 
-					// Ensure at least one row exists in db for previous variant before moving on to next variant
-					if ($variant_id !== null && $last_vid_data_added_for !== $variant_id) {
-						$previous_pid = new GID($previous_decoded['__parentId']);
-						$insert_variant->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $variant_id->get_id(),
-							Metafields::COLUMN_PARENT_ID => $previous_pid->get_id(),
-							Metafields::COLUMN_DATA => '',
-						]);
-					}
-
-					$variant_id = $gid;
-
-				} elseif ($gid->is_metafield()) {
-					if ($product_id === null) {
-						// Encountered a metafield before a product. This really shouldn't
-						// happen, so would indicate something pretty weird is going on
-						$this->generic_exception(
-							'Unexpected format in bulk metafields response (m); declining to continue',
-							'processing'
-						);
-					}
-
-					if ($variant_id !== null) {
-						// The current line is a metafield for a variant
-						$mf = new Metafield($decoded, Metafield::TYPE_VARIANT);
-
-						$insert_variant->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $variant_id->get_id(),
-							Metafields::COLUMN_PARENT_ID => $product_id->get_id(),
-							Metafields::COLUMN_DATA => json_encode($mf),
-						]);
-						$last_vid_data_added_for = $variant_id;
-
-					} else {
-						// The current line is a metafield for a product
-						$mf = new Metafield($decoded, Metafield::TYPE_PRODUCT);
-
-						$insert_product->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $product_id->get_id(),
-							Metafields::COLUMN_DATA => json_encode($mf),
-						]);
-						$last_pid_data_added_for = $product_id;
-					}
-
-					if ($mf_split) {
-						$mf_names[$mf->get_identifier()] = true;
-					}
+					$levels_accumulator[] = [
+						'inventory_item_id' => $last_inv_item_id,
+						'location_id' => $loc_id,
+						'available' => $quantity,
+						'location_name' => $decoded['location']['name'] ?? '',
+					];
 
 				} else {
 					# Not a type we were expecting.
@@ -188,18 +158,12 @@ class BulkInventories extends BulkBase
 			}
 
 			// Commit anything remaining in the batched inserters
-			$insert_product->run_query($cxn);
 			$insert_variant->run_query($cxn);
 
 		} finally {
 			fclose($fh);
 		}
 
-		$result->result = array_values(array_unique(array_merge(
-			$result->result,
-			array_keys($mf_names)
-		)));
 	}
-
 }
 

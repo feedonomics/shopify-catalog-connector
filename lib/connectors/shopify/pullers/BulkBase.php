@@ -4,13 +4,17 @@ namespace ShopifyConnector\connectors\shopify\pullers;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\BulkResult;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
-use Exception;
-use ShopifyConnector\exceptions\ApiException;
-use ShopifyConnector\exceptions\ApiResponseException;
-use ShopifyConnector\exceptions\CustomException;
+
+use ShopifyConnector\util\File_Utilities;
+
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
-use ShopifyConnector\util\File_Utilities;
+use ShopifyConnector\exceptions\CustomException;
+
+use ShopifyConnector\exceptions\ApiException;
+
+use Exception;
 
 /**
  * Base class for bulk GraphQL queries
@@ -59,7 +63,7 @@ abstract class BulkBase
 	 * This is used as a guard against issues when dealing with a file that isn't
 	 * well-formed.
 	 */
-	const MAX_LINE_LENGTH = 65535;
+	const MAX_LINE_LENGTH = 65535 * 20;
 
 	/**
 	 * @var string List of fields to request in BulkOperation objects.
@@ -127,6 +131,13 @@ abstract class BulkBase
 	/**
 	 * Perform all the steps needed to pull and process the data for this bulk puller.
 	 *
+	 * TODO: Currently, this just does everything in a single run. Need to add logic
+	 *   to account for the force_bulk_pieces setting -- if it's TRUE, generate date
+	 *   ranges for batches and do a pull-and-process for each range.
+	 *   - Some pulls should happen w/o chunking? If so, add bool param to indicate that
+	 *   - Need to account for start/end dates in any case?
+	 *     - In settings? Determined from shop info?
+	 *
 	 * @param MysqliWrapper $cxn Connection to execute queries on
 	 * @param BatchedDataInserter $insert_product The insert statement for products
 	 * @param BatchedDataInserter $insert_variant The insert statement for variants
@@ -138,6 +149,22 @@ abstract class BulkBase
 		BatchedDataInserter $insert_variant
 	) : BulkProcessingResult
 	{
+		# TODO: Proper logic in here, loop for chunks
+
+		if ($this->session->settings->force_bulk_pieces) {
+/*
+			# TODO: It's what SM does, but are we doubling up some products by using ">=" AND "<=" ?
+			$prod_query_terms = array_filter([
+				isset($params['start']) ? "created_at:>={$params['start']}" : null,
+				isset($params['end']) ? "created_at:<={$params['end']}" : null,
+			]);
+
+			$prod_search_terms = empty($prod_query_filters) ? [] : [
+				'sortKey: CREATED_AT',
+			];
+*/
+		}
+
 		$prod_query_terms = [];
 		$prod_search_terms = [];
 
@@ -213,6 +240,7 @@ abstract class BulkBase
 
 			} else {
 				# In the unknown case, it's different exception time
+				# TODO: Perhaps this should be a retry instead?
 				$this->generic_exception(
 					"Entered unknown state:\n" . print_r($rawres, true),
 					__FUNCTION__
@@ -236,9 +264,12 @@ abstract class BulkBase
 	/**
 	 * Generate an exception and terminate processing.
 	 *
+	 * TODO: The exception used here probably needs to be updated (and/or the exceptions
+	 *   in the bulk stuff overall). Errors going through this may skip being logged.
+	 *
 	 * @param string $msg The message to use in the exception
 	 * @param ?string $ident Identifier for where the error occurred
-	 * @return void
+	 * @return never
 	 */
 	protected function generic_exception(string $msg, ?string $ident = null)
 	{
@@ -332,7 +363,7 @@ abstract class BulkBase
 	 *
 	 * @param string $gid ID of the query to check the status for
 	 * @return BulkResult Response info for specified bulk operation
-	 * @throws ApiResponseException On invalid API response
+	 * @throws ApiException|UnexpectedResponseException On invalid API response
 	 */
 	private function check_status(string $gid) : BulkResult
 	{
@@ -368,7 +399,6 @@ abstract class BulkBase
 				"Error occurred while downloading query result: {$e->getMessage()}",
 				__FUNCTION__
 			);
-			return '';
 		}
 	}
 

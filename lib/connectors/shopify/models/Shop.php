@@ -2,8 +2,7 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
-
-use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 
 /**
  * Model for information about a Shopify shop
@@ -42,12 +41,12 @@ class Shop
 	 *   <li>`country_code` (required)</li>
 	 *   <li>`created_at` (optional)</li>
 	 * </ul>
-	 * @throws ApiResponseException On missing required keys from `$data`
+	 * @throws UnexpectedResponseException On missing required keys from `$data`
 	 */
 	public function __construct(array $data)
 	{
 		if (!isset($data['domain'], $data['country_code'])) {
-			throw new ApiResponseException('Shop data missing required fields');
+			throw new UnexpectedResponseException('Shopify', 'Shop data missing required fields');
 		}
 
 		$this->domain = $data['domain'];

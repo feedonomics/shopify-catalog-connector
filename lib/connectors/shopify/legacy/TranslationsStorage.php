@@ -2,13 +2,13 @@
 
 namespace ShopifyConnector\connectors\shopify\legacy;
 
-use ShopifyConnector\exceptions\InfrastructureErrorException;
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 use ShopifyConnector\util\db\queries\InsertStatement;
 use ShopifyConnector\util\db\queries\SimpleSelectStatement;
 use ShopifyConnector\util\db\TableHandle;
 use ShopifyConnector\util\db\TemporaryTableGenerator;
+use ShopifyConnector\exceptions\InfrastructureErrorException;
 
 /**
  * Utility for saving Shopify translations for products
@@ -53,7 +53,7 @@ class TranslationsStorage
 	*
 	* @param MysqliWrapper $cxn An existing DB connection to leverage
 	* @throws InfrastructureErrorException
-	 */
+	*/
 	public function __construct(MysqliWrapper $cxn)
 	{
 		$this->table = TemporaryTableGenerator::get($cxn, 'shopify_translations')

@@ -4,6 +4,7 @@ namespace ShopifyConnector\connectors\shopify\pullers;
 
 use ShopifyConnector\connectors\shopify\collections\Collections;
 use ShopifyConnector\connectors\shopify\models\GID;
+use ShopifyConnector\connectors\shopify\models\Collection;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
 
 use ShopifyConnector\util\db\MysqliWrapper;
@@ -30,7 +31,7 @@ class BulkCollections extends BulkBase
 		$prod_search_str = $product_filters->get_filters_gql($prod_query_terms, $prod_search_terms);
 		$meta_search_str = $meta_filters->get_filters_gql();
 
-		$meta = !$this->session->settings->includes_data_type('collections_meta') ? '' : <<<GQL
+		$meta = !$this->session->settings->include_collections_meta ? '' : <<<GQL
 			metafields{$meta_search_str} {
 				edges {
 					node {
@@ -54,17 +55,7 @@ class BulkCollections extends BulkBase
 								ruleSet {
 									appliedDisjunctively
 								}
-			metafields {
-				edges {
-					node {
-						id
-						key
-						value
-						namespace
-						description
-					}
-				}
-			}
+								{$meta}
 								products {
 									edges {
 										node {
@@ -89,6 +80,7 @@ class BulkCollections extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
+		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/collect_bulk_copy'); # TODO: Just for debug/dev
 		$fh = $this->checked_open_file($filename);
 
 		try {
@@ -100,9 +92,10 @@ class BulkCollections extends BulkBase
 			$products = [];
 			$collections = [];
 			$collection_ids = [];
+			$metafields = [];
 
 			while (!feof($fh)) {
-				$line = $this->checked_read_line($fh, self::MAX_COLLECTION_LINE_LENGTH);
+				$line = $this->checked_read_line($fh);
 				if ($line === null) {
 					break;
 				}
@@ -140,12 +133,12 @@ class BulkCollections extends BulkBase
 						$output_collections[$product_id]['custom_collections_handle'][$collections[$id]['handle']] = true;
 						$output_collections[$product_id]['custom_collections_title'][$collections[$id]['title']] = true;
 						$output_collections[$product_id]['custom_collections_id'][$collections[$id]['id']] = true;
-						$output_collections[$product_id]['custom_collections_meta'][$id] = [$metafields[$id]];
+						$output_collections[$product_id]['custom_collections_meta'][$id] = [$metafields[$id] ?? ''];
 					} else { // Smart
 						$output_collections[$product_id]['smart_collections_handle'][$collections[$id]['handle']] = true;
 						$output_collections[$product_id]['smart_collections_title'][$collections[$id]['title']] = true;
 						$output_collections[$product_id]['smart_collections_id'][$collections[$id]['id']] = true;
-						$output_collections[$product_id]['smart_collections_meta'][$id] = [$metafields[$id]];
+						$output_collections[$product_id]['smart_collections_meta'][$id] = [$metafields[$id] ?? ''];
 					}
 				}
 				$insert_product->add_value_set($cxn, [

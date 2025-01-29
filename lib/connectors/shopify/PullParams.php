@@ -3,6 +3,9 @@ namespace ShopifyConnector\connectors\shopify;
 
 /**
  * Params for pullers to use for filtering
+ *
+ * TODO: What's the difference between this and PullerParams
+ * TODO: Can these two be merged?
  */
 class PullParams
 {

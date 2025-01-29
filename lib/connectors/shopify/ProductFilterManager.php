@@ -3,11 +3,17 @@
 namespace ShopifyConnector\connectors\shopify;
 
 use ShopifyConnector\connectors\shopify\models\FilterManager;
+use ShopifyConnector\connectors\shopify\models\Product;
+
 use ShopifyConnector\exceptions\ValidationException;
 
 /**
  * Utility for parsing and managing a list of product filters for pulling
  * product data from Shopify
+ *
+ * TODO: See note on FILTER_PUBLISHED_STATUS !!!
+ *
+ * TODO: Move this into products/ directory?
  */
 class ProductFilterManager extends FilterManager
 {
@@ -61,6 +67,10 @@ class ProductFilterManager extends FilterManager
 	const FILTER_COLLECTION_ID = 'collection_id';
 
 	/**
+	 * TODO: This may use different values now (or maybe it always did with gql?)
+	 *   See the values here for reference:
+	 *   https://shopify.dev/docs/api/admin-graphql/2024-10/objects/Product#query-products-query-query-filter-published_status
+	 *
 	 * @var string Return products by their published status
 	 * (any/published/unpublished)
 	 */

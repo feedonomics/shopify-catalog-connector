@@ -2,9 +2,11 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
+use ShopifyConnector\connectors\shopify\ProductFilterManager;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\products\Products;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
+
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 
@@ -21,6 +23,8 @@ class BulkProducts extends BulkBase
 	{
 		$product_filters = $this->session->settings->product_filters;
 		$prod_search_str = $product_filters->get_filters_gql($prod_query_terms, $prod_search_terms);
+
+		# TODO: Handle limited/extra fields
 
 		# Initially, these queries attempt to simply recreate the set of data
 		# that was pulled through the REST API. The "id" fields will always be
@@ -73,40 +77,41 @@ class BulkProducts extends BulkBase
 		#
 		# The fields in the query below are a starting point, but may not be exactly what
 		# we want ultimately.
-		$extra_parent_fields = '';
-		$extra_variant_fields = '';
+		$allowed_extra_parent_fields = '';
 		if ($this->session->settings->extra_parent_fields) {
 			foreach ($this->session->settings->extra_parent_fields as $field) {
-				$extra_parent_fields .= "{$field}\n";
+				$allowed_fields = [
+					'status',
+					'bodyHtml',
+				];
+				if (in_array($field,$allowed_fields)) {
+					$allowed_extra_parent_fields .= "{$field}\n";
+				}
 			}
-			$extra_parent_fields = trim($extra_parent_fields);
+			$allowed_extra_parent_fields = trim($allowed_extra_parent_fields);
 		}
-		if ($this->session->settings->extra_variant_fields) {
-			foreach ($this->session->settings->extra_variant_fields as $field) {
-				$extra_variant_fields .= "{$field}\n";
-			}
-			$extra_variant_fields = trim($extra_variant_fields);
-		}
-
 		$media_filter = '(query: "media_type:IMAGE")';
 		$presentment_prices = '';
 		if ($this->session->settings->include_presentment_prices) {
-		$presentment_prices = <<<GQL
-									presentmentPrices {
-										edges {
-											node {
-												price {
-													currencyCode
-													amount
-												}
-												compareAtPrice {
-													currencyCode
-													amount
+			$currency_filters = $this->session->settings->product_filters->get(ProductFilterManager::FILTER_PRESENTMENT_CURRENCIES);
+			$currency_filter_str = empty($currency_filters) ? '' : "(presentmentCurrencies: [{$currency_filters}])";
+			$presentment_prices = <<<GQL
+										presentmentPrices {$currency_filter_str} {
+
+											edges {
+												node {
+													price {
+														currencyCode
+														amount
+													}
+													compareAtPrice {
+														currencyCode
+														amount
+													}
 												}
 											}
 										}
-									}
-		GQL;
+			GQL;
 		}
 
 		return <<<GQL
@@ -149,13 +154,12 @@ class BulkProducts extends BulkBase
 							description
 							title
 						}
-						status
 						tags
 						templateSuffix
 						title
 						updatedAt
 						vendor
-						{$extra_parent_fields}
+						{$allowed_extra_parent_fields}
 						variants {
 							edges {
 								node {
@@ -204,7 +208,6 @@ class BulkProducts extends BulkBase
 									taxCode
 									title
 									updatedAt
-									{$extra_variant_fields}
 								}
 							}
 						}
@@ -225,6 +228,8 @@ class BulkProducts extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
+		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/products_bulk_copy'); # TODO: Just for debug/dev
+
 		$pull_stats = $this->session->pull_stats[Products::MODULE_NAME];
 		$fh = $this->checked_open_file($filename);
 
@@ -250,6 +255,7 @@ class BulkProducts extends BulkBase
 						}
 						continue;
 					} else {
+						// TODO: Error? Log something? Different behavior?
 						++$pull_stats->general_errors;
 						continue;
 					}
@@ -321,6 +327,8 @@ class BulkProducts extends BulkBase
 						);
 					}
 
+					// TODO: Should make a "Media" model at some point -- just doing
+					//   this in-place for now in the interest of simplicity
 					$media_data = [
 						'height' => $decoded['preview']['image']['height'] ?? null,
 						'width' => $decoded['preview']['image']['height'] ?? null,

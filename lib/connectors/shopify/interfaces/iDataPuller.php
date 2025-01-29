@@ -3,8 +3,8 @@
 namespace ShopifyConnector\connectors\shopify\interfaces;
 
 use ShopifyConnector\connectors\shopify\structs\PullStats;
-use ShopifyConnector\connectors\shopify\ShopifyFieldMap;
 use ShopifyConnector\util\db\queries\InsertStatement;
+use ShopifyConnector\connectors\shopify\ShopifyFieldMap;
 
 /*
  * NOTE: Considering moving pullPage/hasNextPage/etc out of this interface and

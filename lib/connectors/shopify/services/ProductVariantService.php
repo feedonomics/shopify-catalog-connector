@@ -2,11 +2,12 @@
 namespace ShopifyConnector\connectors\shopify\services;
 
 use Exception;
+use ShopifyConnector\exceptions\ApiException;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\ProductVariantPileGQL;
 use ShopifyConnector\connectors\shopify\structs\PullerParams;
 use ShopifyConnector\api\service\VariantService as clVariantService;
-use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 
 /**
  * Service for making product variant related calls
@@ -19,8 +20,8 @@ final class ProductVariantService
 	 *
 	 * @param SessionContainer $session The session container
 	 * @param string $productId The product ID to get the variant count for
-	 * @param string $dateStart
-	 * @param string $dateEnd
+	 * @param string $dateStart TODO: Do we need this filter?
+	 * @param string $dateEnd TODO: Do we need this filter?
 	 * @param string $publishStatus Filter for the published status
 	 * @return int The variant count
 	 */
@@ -37,7 +38,7 @@ final class ProductVariantService
 			'created_at_min' => $dateStart,
 			'created_at_max' => $dateEnd,
 			'published_status' => $publishStatus,
-		])['count'];
+		])['count']; # TODO: Forked?
 		$session->set_last_call_limit();
 		return (int)$count;
 	}
@@ -50,7 +51,8 @@ final class ProductVariantService
 	 * @param int $first The `first` GQL filter
 	 * @param string|null $after The `after` GQL filter
 	 * @return ProductVariantPileGQL The variant contextual prices list
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiException On API errors
 	 */
 	public static function getContextualPrices(
 		SessionContainer $session,
@@ -59,6 +61,7 @@ final class ProductVariantService
 		?string $after = null
 	) : ProductVariantPileGQL
 	{
+		# TODO: This needs to be revamped to the current way of doing things
 		$res = $session->client->graphqlRequest("query {
 			productVariants (first: {$first}, after: {$after}) {
 				nodes {
@@ -81,6 +84,9 @@ final class ProductVariantService
 			}
 		}");
 
+		# TODO: Check response for error
+		#   - Abstract that higher up?
+
 		return new ProductVariantPileGQL(
 			$res['data']['products']['nodes'] ?? null,
 			$res['data']['products']['pageInfo'] ?? null
@@ -90,16 +96,26 @@ final class ProductVariantService
 	/**
 	 * Get category information at the variant level via GraphQL
 	 *
+	 * <hr>
+	 * TODO: We could also just do this off the Product, which would be more
+	 *   efficient. But that may present issues if variants aren't a part of
+	 *   the pull as well when it comes time to join everything up in the db
+	 *   in the platform. (We should be able to join the data well enough in
+	 *   the local db when variants are present by updating rows matching on
+	 *   product_id/item_group_id.)
+	 *
 	 * @param SessionContainer $session The session container
 	 * @param PullerParams $params Params to filter the API call
 	 * @return ProductVariantPileGQL The list of variant categories
-	 * @throws ApiResponseException On API errors
+	 * @throws ApiException On API errors
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public static function getCategories(
 		SessionContainer $session,
 		PullerParams $params
 	) : ProductVariantPileGQL
 	{
+		# TODO: "limit" not showing up in params after first page
 		$first = $params->params['limit'] ?? 100;
 		$after = $params->nextPageInfo !== null
 			? ", after: \"{$params->nextPageInfo}\""

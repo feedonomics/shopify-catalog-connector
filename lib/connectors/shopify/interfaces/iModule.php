@@ -6,9 +6,11 @@ use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
-use Generator;
-use ShopifyConnector\exceptions\InfrastructureErrorException;
+
 use ShopifyConnector\util\db\MysqliWrapper;
+use ShopifyConnector\exceptions\InfrastructureErrorException;
+
+use Generator;
 
 /**
  * Interface that all module main classes must implement.

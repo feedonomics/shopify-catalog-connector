@@ -1,9 +1,10 @@
 <?php
 namespace ShopifyConnector\connectors\shopify\models;
 
+use Exception;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use Generator;
 use ShopifyConnector\connectors\shopify\interfaces\iDataList;
-use ShopifyConnector\exceptions\ApiResponseException;
 
 /**
  * Model for a pile of variants returned from a GraphQL query
@@ -21,12 +22,12 @@ final class ProductVariantPileGQL extends PagedGQL implements iDataList
 	 *
 	 * @param array|null $nodes The variant nodes from GraphQL
 	 * @param array|null $pageInfo The page info from GraphQL
-	 * @throws ApiResponseException On invalid nodes or page info
+	 * @throws UnexpectedResponseException On invalid nodes or page info
 	 */
 	public function __construct(?array $nodes, ?array $pageInfo)
 	{
 		if ($nodes === null || $pageInfo === null) {
-			throw new ApiResponseException(sprintf(
+			throw new UnexpectedResponseException('Shopify', sprintf(
 				'Response did not include requested data:%s%s',
 				$nodes === null ? ' nodes' : '',
 				$pageInfo === null ? ' pageInfo' : ''

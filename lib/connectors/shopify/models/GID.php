@@ -2,7 +2,7 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
-use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 
 /**
  * Model for a Shopify GID.
@@ -20,6 +20,7 @@ final class GID
 	const TYPE_COLLECTION = 4;
 	const TYPE_IMAGE = 5;
 	const TYPE_TRANSLATION = 6;
+	const TYPE_INVENTORY_LEVEL = 7;
 
 
 	/**
@@ -50,7 +51,7 @@ final class GID
 	 * <p>Example: `gid://shopify/Product/632910392`</p>
 	 *
 	 * @param string $gid The raw GID to parse and store
-	 * @throws ApiResponseException On invalid GIDs
+	 * @throws UnexpectedResponseException On invalid GIDs
 	 */
 	public function __construct(string $gid)
 	{
@@ -61,7 +62,7 @@ final class GID
 		}
 		$fmtMatched = preg_match("-^{$pfx}(\w+)/(\d+)$-", $gid, $matches);
 		if ($fmtMatched !== 1) {
-			throw new ApiResponseException(sprintf(
+			throw new UnexpectedResponseException('Shopify', sprintf(
 				'Invalid GID format: %.128s',
 				$gid
 			));
@@ -92,8 +93,11 @@ final class GID
 			case 'collection':
 				return self::TYPE_COLLECTION;
 			case 'mediaimage':
+				return self::TYPE_IMAGE;
 			case 'translation':
 				return self::TYPE_IMAGE;
+			case 'inventorylevel':
+				return self::TYPE_INVENTORY_LEVEL;
 		}
 
 		return self::TYPE_UNKNOWN;
@@ -189,6 +193,16 @@ final class GID
 	public function is_translation() : bool
 	{
 		return $this->type === self::TYPE_TRANSLATION;
+	}
+
+	/**
+	 * Check if this GID is an inventory level type
+	 *
+	 * @return bool TRUE if this GID is for a inventory level object
+	 */
+	public function is_inventory_level() : bool
+	{
+		return $this->type === self::TYPE_INVENTORY_LEVEL;
 	}
 
 }

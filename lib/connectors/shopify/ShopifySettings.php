@@ -2,15 +2,15 @@
 
 namespace ShopifyConnector\connectors\shopify;
 
-use ShopifyConnector\exceptions\ValidationException;
-use ShopifyConnector\util\io\InputParser;
 use ShopifyConnector\util\RateLimiter;
-use ShopifyConnector\validation\ClientOptionsValidator;
+use ShopifyConnector\util\io\InputParser;
+
+use ShopifyConnector\exceptions\ValidationException;
 
 /**
  * The Shopify import settings
  */
-class ShopifySettings extends ClientOptionsValidator
+class ShopifySettings
 {
 
 	/**
@@ -27,6 +27,8 @@ class ShopifySettings extends ClientOptionsValidator
 	/**
 	 * Product filters are relevant to all modules, so this filter manager should always
 	 * be a part of this primary settings manager.
+	 *
+	 * (TODO: Make sure all modules are using these filters, not just the products module)
 	 *
 	 * @var ProductFilterManager Manager for product filter options
 	 * @readonly
@@ -75,6 +77,8 @@ class ShopifySettings extends ClientOptionsValidator
 	public bool $use_metafield_namespaces;
 	public bool $force_bulk_pieces;
 	public bool $debug;
+	public bool $include_inventory_level;
+	public bool $include_collections_meta;
 
 	/*
 	 * String settings fields
@@ -84,6 +88,7 @@ class ShopifySettings extends ClientOptionsValidator
 	public string $delimiter;
 	public string $enclosure;
 	public string $escape;
+	//public string $strip_characters; // TODO: This doesn't appear to actually be a supported option
 	public string $replace;
 	public string $tax_rates;
 
@@ -91,9 +96,16 @@ class ShopifySettings extends ClientOptionsValidator
 	 * Array settings fields
 	 */
 	public array $data_types;
-	public array $extra_parent_fields;
-	public array $extra_variant_fields;
 
+	/**
+	 * @var string[] Store for the list of extra parent fields to pull
+	 */
+	public array $extra_parent_fields = [];
+
+	/**
+	 * @var string[] Store for the list of extra variant fields to pull
+	 */
+	public array $extra_variant_fields = [];
 
 	/**
 	 * Parse the given array of client options into a new ShopifySettings
@@ -105,7 +117,6 @@ class ShopifySettings extends ClientOptionsValidator
 	public function __construct(array $client_options)
 	{
 		self::adjust_params($client_options);
-		$this->check($client_options);
 
 		$this->parse_options_into_fields($client_options);
 		$this->product_filters = new ProductFilterManager(
@@ -124,6 +135,11 @@ class ShopifySettings extends ClientOptionsValidator
 	 * certain parameters.
 	 *
 	 * The options array will be modified in place.
+	 *
+	 * Legacy support
+	 * TODO: Is there a better way around this? E.g.
+	 *   - Is password key ever even used?
+	 *   - Can validator be tweaked to require oauth OR password?
 	 *
 	 * @param array &$client_options The client options to adjust
 	 */
@@ -168,24 +184,34 @@ class ShopifySettings extends ClientOptionsValidator
 		$this->delimiter = $client_options['delimiter'] ?? ',';
 		$this->enclosure = $client_options['enclosure'] ?? '"';
 		$this->escape = $client_options['escape'] ?? '"';
+		//$this->strip_characters = $client_options['strip_characters'] ?? []; // TODO: Needs to be explode'd
 		$this->replace = $client_options['replace'] ?? '';
 
 		$this->tax_rates = $client_options['tax_rates'] ?? '';
 
-		$this->extra_parent_fields = array_map(
-			fn($field) => trim($field),
-			explode(',', $client_options['extra_parent_fields'] ?? '')
-		) ?? [];
+		foreach(explode(',', $client_options['extra_parent_fields'] ?? '') as $field){
+			$field = trim($field);
+			if(!empty($field)){
+				$this->extra_parent_fields[] = $field;
+			}
+		}
 
-		$this->extra_variant_fields = array_map(
-			fn($field) => trim($field),
-			explode(',', $client_options['extra_variant_fields'] ?? '')
-		) ?? [];
+		foreach(explode(',', $client_options['extra_variant_fields'] ?? '') as $field){
+			$field = trim($field);
+			if(!empty($field)){
+				$this->extra_variant_fields[] = $field;
+			}
+		}
 
-		$this->data_types = array_merge(
+		$data_types = array_merge(
 			self::get_compat_datatypes($client_options),
 			explode(',', $client_options['data_types'] ?? 'products')
 		);
+
+		$this->include_inventory_level = in_array('inventory_level', $data_types);
+		$this->include_collections_meta = in_array('collections_meta', $data_types);
+
+		$this->data_types = array_diff($data_types, ['inventory_level', 'collections_meta']);
 	}
 
 	/**

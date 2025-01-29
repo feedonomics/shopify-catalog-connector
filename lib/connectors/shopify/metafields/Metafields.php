@@ -2,7 +2,6 @@
 
 namespace ShopifyConnector\connectors\shopify\metafields;
 
-use Exception;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
 use ShopifyConnector\connectors\shopify\models\Metafield;
@@ -11,10 +10,12 @@ use ShopifyConnector\connectors\shopify\models\ProductVariant;
 use ShopifyConnector\connectors\shopify\pullers\BulkMetafields;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
-use Generator;
+
 use ShopifyConnector\util\db\MysqliWrapper;
-use ShopifyConnector\util\db\queries\BatchedDataInserter;
 use ShopifyConnector\util\db\TableHandle;
+use ShopifyConnector\util\db\queries\BatchedDataInserter;
+
+use Generator;
 
 /**
  * The Metafields module main class.
@@ -27,6 +28,7 @@ class Metafields implements iModule
 
 	const PRODUCT_META_KEY = 'product_meta';
 	const VARIANT_META_KEY = 'variant_meta';
+
 
 	private SessionContainer $session;
 
@@ -43,7 +45,7 @@ class Metafields implements iModule
 
 	public function get_module_name() : string
 	{
-		return 'metafields';
+		return 'meta';
 	}
 
 	public function get_output_field_list() : array
@@ -77,7 +79,7 @@ class Metafields implements iModule
 	public function get_products(MysqliWrapper $cxn) : Generator
 	{
 		if ($this->table_product === null) {
-			throw new Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
 		}
 
 		$last_retrieved_pid = 0;
@@ -91,6 +93,7 @@ class Metafields implements iModule
 
 			$last_retrieved_pid = (int)$product->id;
 			if ($last_retrieved_pid <= 0) {
+				# TODO: Log something? Error?
 				return;
 			}
 
@@ -114,7 +117,8 @@ class Metafields implements iModule
 
 		$row = $result->fetch_assoc();
 		if ($row === false) {
-			throw new Exception('Error while retrieving product data: ' . $this->get_module_name());
+			# TODO: Better error? Log something? Is mysqli set up to throw instead?
+			throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
 		}
 
 		if ($row === null) {
@@ -127,7 +131,8 @@ class Metafields implements iModule
 
 		for ( ; $row !== null; $row = $result->fetch_assoc()) {
 			if ($row === false) {
-				throw new Exception('Error while retrieving product data: ' . $this->get_module_name());
+				# TODO: Better error? Log something? Is mysqli set up to throw instead?
+				throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
 			}
 
 			if (empty($row['data'])) {
@@ -163,7 +168,8 @@ class Metafields implements iModule
 
 		foreach ($result as $row) {
 			if ($row === false) {
-				throw new Exception('Error while retrieving variant data: ' . $this->get_module_name());
+				# TODO: Better error? Log something? Is mysqli set up to throw instead?
+				throw new \Exception('Error while retrieving variant data: ' . $this->get_module_name());
 			}
 
 			$var_id = $row['id'];
@@ -200,7 +206,7 @@ class Metafields implements iModule
 	public function add_data_to_product(MysqliWrapper $cxn, Product $product) : void
 	{
 		if ($this->table_product === null) {
-			throw new Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_product, $product->id);
@@ -208,7 +214,8 @@ class Metafields implements iModule
 
 		foreach ($result as $row) {
 			if ($row === false) {
-				throw new Exception('Error while retrieving data for individual product: ' . $this->get_module_name());
+				# TODO: Better error? Log something? Is mysqli set up to throw instead?
+				throw new \Exception('Error while retrieving data for individual product: ' . $this->get_module_name());
 			}
 
 			if (empty($row['data'])) {
@@ -234,7 +241,7 @@ class Metafields implements iModule
 	public function add_data_to_variant(MysqliWrapper $cxn, ProductVariant $variant) : void
 	{
 		if ($this->table_variant === null) {
-			throw new Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_variant, $variant->id);
@@ -242,7 +249,8 @@ class Metafields implements iModule
 
 		foreach ($result as $row) {
 			if ($row === false) {
-				throw new Exception('Error while retrieving data for individual variant: ' . $this->get_module_name());
+				# TODO: Better error? Log something? Is mysqli set up to throw instead?
+				throw new \Exception('Error while retrieving data for individual variant: ' . $this->get_module_name());
 			}
 
 			if (empty($row['data'])) {

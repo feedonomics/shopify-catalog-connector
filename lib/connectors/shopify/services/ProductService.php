@@ -34,7 +34,7 @@ final class ProductService
 			'created_at_min' => $dateStart,
 			'created_at_max' => $dateEnd,
 			'published_status' => $publishStatus,
-		])['count'];
+		])['count']; # TODO: Forked?
 		$session->set_last_call_limit();
 		return (int)$count;
 	}

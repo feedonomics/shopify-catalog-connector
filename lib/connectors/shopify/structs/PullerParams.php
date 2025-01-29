@@ -6,6 +6,9 @@ namespace ShopifyConnector\connectors\shopify\structs;
  * Container for parameters and other info used by pullers/services. The main
  * purpose of this class is to make it possible to have an abstract base between
  * REST and GraphQL logics and for ShopifyPuller to be generalized.
+ *
+ * TODO: What's the difference between this and PullParams
+ * TODO: Can these two be merged?
  */
 class PullerParams
 {

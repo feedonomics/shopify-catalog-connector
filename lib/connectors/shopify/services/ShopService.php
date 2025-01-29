@@ -2,12 +2,12 @@
 
 namespace ShopifyConnector\connectors\shopify\services;
 
+use ShopifyConnector\api\service\StoreService;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\Shop;
 use ShopifyConnector\api\service\CountryService as clCountryService;
 use ShopifyConnector\api\service\ProductService as clProductService;
-use ShopifyConnector\api\service\StoreService;
-use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 
 /**
  * Service for making Shopify shop related calls
@@ -20,12 +20,12 @@ final class ShopService
 	 *
 	 * @param SessionContainer $session The session container
 	 * @return Shop Information about the shop
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public static function get_shop_info_rest(SessionContainer $session) : Shop
 	{
-		$ps = new StoreService($session->client);
-		$info = $ps->getStoreInfo();
+		$ss = new StoreService($session->client);
+		$info = $ss->getStoreInfo();
 		$session->set_last_call_limit();
 
 		$shop = new Shop($info['shop'] ?? []);
@@ -52,7 +52,7 @@ final class ShopService
 	public static function get_country_info_rest(SessionContainer $session) : array
 	{
 		$cs = new clCountryService($session->client);
-		$list = $cs->getCountries(['fields' => 'code,name,tax,provinces']);
+		$list = $cs->getCountries(['fields' => 'code,name,tax,provinces'])->getItems(); # TODO: Forked?
 		$session->set_last_call_limit();
 
 		# De-Resource the results

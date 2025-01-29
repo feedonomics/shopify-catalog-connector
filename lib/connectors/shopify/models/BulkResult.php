@@ -1,7 +1,7 @@
 <?php
 namespace ShopifyConnector\connectors\shopify\models;
 
-use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 
 /**
  * Container for response data from Shopify concerning the status of a bulk
@@ -80,7 +80,7 @@ class BulkResult
 	 * request
 	 *
 	 * @param array $res The bulk query response to parse and store
-	 * @throws ApiResponseException On invalid response
+	 * @throws UnexpectedResponseException On invalid response
 	 */
 	public function __construct(array $res)
 	{
@@ -115,7 +115,7 @@ class BulkResult
 	 *
 	 * @param array $tree The response object to inspect
 	 * @return array The `BulkOperation` node if found
-	 * @throws ApiResponseException When no `BulkOperation` node found
+	 * @throws UnexpectedResponseException When no `BulkOperation` node found
 	 */
 	private function getBulkOpNode(array $tree) : array
 	{
@@ -136,7 +136,8 @@ class BulkResult
 		}
 
 		$errors = $this->getUserErrNode($tree);
-		throw new ApiResponseException(
+		throw new UnexpectedResponseException(
+			'Shopify',
 			'Unable to find bulkOp response data. Messages: ' . print_r($errors, true)
 		);
 	}

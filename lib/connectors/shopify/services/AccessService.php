@@ -2,10 +2,11 @@
 
 namespace ShopifyConnector\connectors\shopify\services;
 
+use ShopifyConnector\api\service\AccessService as clAccessService;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\AccessScopes;
+
 use ShopifyConnector\exceptions\ApiException;
-use ShopifyConnector\api\service\AccessService as clAccessService;
 
 /**
  * Service for making access-related calls in the Shopify API's.

@@ -2,10 +2,12 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
+use ShopifyConnector\connectors\shopify\ProductFilterManager;
 use ShopifyConnector\connectors\shopify\translations\Translations;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\models\Translation;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
+
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 
@@ -61,9 +63,10 @@ class BulkTranslations extends BulkBase
 			$last_pid_data_added_for = null;
 			$last_vid_data_added_for = null;
 			$decoded = null;
+			$translation_names = [];
 
 			while (!feof($fh)) {
-				$line = $this->checked_read_line($fh, self::MAX_TRANSLATION_LINE_LENGTH);
+				$line = $this->checked_read_line($fh);
 				if ($line === null) {
 					break;
 				}
@@ -77,7 +80,7 @@ class BulkTranslations extends BulkBase
 				$gid = new GID($decoded['id']);
 				$product_id = $gid;
 				if ($gid->is_product()) {
-					$translation = new Translation($decoded, Translation::TYPE_PRODUCT);
+					$translation = new Translation($decoded);
 					// Ensure that there is data in translations
 					if (!empty($decoded['translations'])) {
 						$insert_product->add_value_set($cxn, [
@@ -100,7 +103,7 @@ class BulkTranslations extends BulkBase
 		}
 		$result->result = array_values(array_unique(array_merge(
 			$result->result,
-			array_keys($translation_names ?? [])
+			array_keys($translation_names)
 		)));
 	}
 

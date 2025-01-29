@@ -4,10 +4,12 @@ namespace ShopifyConnector\connectors\shopify;
 
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
-use Generator;
-use ShopifyConnector\exceptions\InfrastructureErrorException;
-use ShopifyConnector\exceptions\ValidationException;
+
 use ShopifyConnector\util\db\MysqliWrapper;
+
+use ShopifyConnector\exceptions\ValidationException;
+
+use Generator;
 
 /**
  * Class to handle processing requested data and putting together everything
@@ -62,7 +64,6 @@ final class ShopifyRunManager
 		'meta' => metafields\Metafields::class,
 		'translations' => translations\Translations::class,
 		'collections' => collections\Collections::class, # Lowest precedence: collections
-		'collections_meta' => collections\Collections::class, # Lowest precedence: collections_meta
 	];
 
 
@@ -122,8 +123,6 @@ final class ShopifyRunManager
 	/**
 	 * Execute the manager by iterating and calling the pull and store data
 	 * method over the active puller list
-	 *
-	 * @throws InfrastructureErrorException
 	 */
 	public function run(MysqliWrapper $cxn) : void
 	{
@@ -182,7 +181,6 @@ final class ShopifyRunManager
 	 * @param MysqliWrapper $cxn The database connection to query on
 	 * @param string[] $output_fields The list of desired output fields
 	 * @return Generator<Array<string, mixed>> A generator for the compiled output data
-	 * @throws InfrastructureErrorException
 	 */
 	public function retrieve_output(MysqliWrapper $cxn, array $output_fields) : Generator
 	{

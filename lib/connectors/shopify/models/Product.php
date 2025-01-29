@@ -2,7 +2,7 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
-use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use ShopifyConnector\util\io\DataUtilities;
 
 /**
@@ -124,7 +124,7 @@ final class Product extends FieldHaver
 	 *
 	 * @param string $field The name of the field to get the processed value for
 	 * @return mixed The processed value for the specified field
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_processed_value(string $field)
 	{
@@ -135,6 +135,7 @@ final class Product extends FieldHaver
 		#   (If the reworking to map upon construction sticks, can take out
 		#   the non-mapped entries.)
 
+		# TODO: Default to '' for id good or bad?
 		switch ($field) {
 			case 'product_type':
 				return $this->get('productType', '');
@@ -183,7 +184,7 @@ final class Product extends FieldHaver
 	 * published value
 	 *
 	 * @return string The published status
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_published_status() : string
 	{
@@ -198,7 +199,7 @@ final class Product extends FieldHaver
 	 *
 	 *
 	 * @return string The image link
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_image_link() : string
 	{
@@ -209,8 +210,10 @@ final class Product extends FieldHaver
 	/**
 	 * Get a comma-separated list of image links for this product.
 	 *
+	 * TODO: This and other image-related things need to be updated for GQL
+	 *
 	 * @return string The list of additional links
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_image_links() : string
 	{
@@ -287,14 +290,17 @@ final class Product extends FieldHaver
 	/**
 	 * Get a list of variant objects representing the variants for this product.
 	 *
+	 * @deprecated TODO: Remove after ensuring nothing is needed from this
+	 *
 	 * @return ProductVariant[] The list of this product's variants as ProductVariant objects
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function getVariants_old() : array
 	{
 		$vars = $this->get('variants');
 
 		#
+		# TODO: Special case if no variants or skip?
 		# ({@see ProductPuller::storeProductData()})
 		#
 		# Returning an empty dummy ProductVariant will cause us to keep an
@@ -317,7 +323,7 @@ final class Product extends FieldHaver
 	 *
 	 * @param string $name The name of the option
 	 * @return array|null The value of the option
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_option_by_name(string $name) : ?array
 	{
@@ -328,7 +334,7 @@ final class Product extends FieldHaver
 	 * Get all options for this product
 	 *
 	 * @return array The array of product options
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_options() : array
 	{

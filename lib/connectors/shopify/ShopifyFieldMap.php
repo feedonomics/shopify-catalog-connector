@@ -35,6 +35,7 @@ class ShopifyFieldMap
 
 	/**
 	 * @var int Flag for integer data type
+	 * TODO: is this even used?
 	 */
 	const TYPE_UINT = 32;
 
@@ -50,6 +51,8 @@ class ShopifyFieldMap
 	 * to represent actual database data types for each column.
 	 *
 	 * @see Product::FIELD_NAME_MAP
+	 * TODO: Clean up and optimize
+	 *   - Use MEDIUMTEXT for metas
 	 */
 	private static array $map = [
 

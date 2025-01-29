@@ -2,8 +2,8 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
-
-use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+use ShopifyConnector\exceptions\ValidationException;
 
 /**
  * Base class for models that contain accessible fields and that will
@@ -70,7 +70,7 @@ abstract class FieldHaver
 	 * @param mixed $default A default value to use when `key` is not present
 	 * @param bool $matchType TRUE to enforce type-matching for present values
 	 * @return mixed The value at the given key, falling back to the given default
-	 * @throws ApiResponseException On type mis-match when `matchType` is TRUE
+	 * @throws UnexpectedResponseException On type mis-match when `matchType` is TRUE
 	 */
 	public final function get(string $key, $default = null, bool $matchType = true)
 	{
@@ -84,7 +84,7 @@ abstract class FieldHaver
 			&& $matchType
 			&& gettype($val) !== gettype($default)
 		) {
-			throw new ApiResponseException(sprintf(
+			throw new UnexpectedResponseException('Shopify', sprintf(
 				'Invalid data type (%s -- expected %s) received for `%s` in %s',
 				gettype($val),
 				gettype($default),
@@ -119,6 +119,11 @@ abstract class FieldHaver
 	}
 
 	/**
+	 * TODO: This used to be abstract. Review and redo comment here. Clear out params
+	 *   once made irrelevant by going through global settings for `params`, and doing
+	 *   new method of field handling where only ones that should be outputted are added
+	 *   to begin with.
+	 *
 	 * Get the set of fields that represents the data of the object that
 	 * implements this class. This is the "output data" for any given object
 	 * and depends on what's being modeled, so implementation is left to the

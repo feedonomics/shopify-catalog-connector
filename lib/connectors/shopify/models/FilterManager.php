@@ -38,6 +38,10 @@ abstract class FilterManager
 	 * Get an array of filters and values for use in a REST query. The output
 	 * of this can be used when setting up {@see PullParams}, for example.
 	 *
+	 * TODO: May need this to return a PullParams instead, since some filters
+	 *   (such as limit and presentment) need to be included with every request,
+	 *   while others (such as pub status) are only included for the first page.
+	 *
 	 * @return array Filters to use when calling a REST endpoint
 	 */
 	public function get_filters_rest() : array

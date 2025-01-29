@@ -3,6 +3,9 @@
 namespace ShopifyConnector\connectors\shopify\models;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
+
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+
 use JsonSerializable;
 
 /**
@@ -48,7 +51,7 @@ final class Metafield extends FieldHaver implements JsonSerializable
 				return 'variant_meta';
 
 			case self::TYPE_COLLECTION:
-				return 'collection_meta';
+				return 'collection_meta'; # TODO: How is this actually named?
 		}
 
 		return 'other_meta';

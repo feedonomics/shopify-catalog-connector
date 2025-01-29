@@ -4,15 +4,18 @@ namespace ShopifyConnector\connectors\shopify\collections;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
+use ShopifyConnector\connectors\shopify\models\Collection;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
 use ShopifyConnector\connectors\shopify\pullers\BulkCollections;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
-use Generator;
+
 use ShopifyConnector\util\db\MysqliWrapper;
-use ShopifyConnector\util\db\queries\BatchedDataInserter;
 use ShopifyConnector\util\db\TableHandle;
+use ShopifyConnector\util\db\queries\BatchedDataInserter;
+
+use Generator;
 
 /**
  * The Collections module main class
@@ -22,12 +25,11 @@ class Collections implements iModule
 
 	use StandardModule;
 
+
 	private SessionContainer $session;
 
 	private ?TableHandle $table_product = null;
 	private ?TableHandle $table_variant = null;
-
-	private array $collection_names = [];
 
 
 	public function __construct(SessionContainer $session)
@@ -51,16 +53,12 @@ class Collections implements iModule
 		   'smart_collections_handle',
 		   'smart_collections_title',
 		   'smart_collections_id',
-
-		# For "collections_meta" requested:
-		   'custom_collections_meta',
-		   'smart_collections_meta',
 		];
 
-		if ($this->session->settings->includes_data_type('collections_meta')) {
+		if ($this->session->settings->include_collections_meta) {
 			$output_fields = array_merge($output_fields, [
-				'custom_collections_meta',
-				'smart_collections_meta',
+			   'custom_collections_meta',
+			   'smart_collections_meta',
 			]);
 		}
 
@@ -68,6 +66,8 @@ class Collections implements iModule
 	}
 
 	/**
+	 * TODO: Make PullStats a globally-accessible singleton or w/"active" like session
+	 *
 	 * @inheritDoc
 	 */
 	public function run(MysqliWrapper $cxn, PullStats $stats) : void
@@ -81,7 +81,6 @@ class Collections implements iModule
 
 		$puller = new BulkCollections($this->session);
 		$processing_result = $puller->do_bulk_pull($cxn, $insert_product, $insert_variant);
-		$this->collection_names = $processing_result->result;
 	}
 
 	/**
@@ -135,35 +134,26 @@ class Collections implements iModule
 		}
 
 		$product = new Product(['id' => $row['id']]);
-		$collections = [];
 
-		for ( ; $row !== null; $row = $result->fetch_assoc()) {
-			if ($row === false) {
-				throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
-			}
+		$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
 
-			if (empty($row['data'])) {
-				continue;
-			}
-
-			$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
-			$collections[$row['id']] = $decoded_data;
-		}
-
-		foreach ($collections as $product_id=>$collection) {
-			foreach ($collection as $collection_field=>$collection_data) {
-				//echo "\n\n" . $collection_field . "\n" . json_encode($collection_data) . "\n" . implode('|',array_keys($collection_data));
-				if (str_contains($collection_field,'meta')) {
-					$product->add_datum($collection_field, json_encode($collection_data));
-				} else {
-					$product->add_datum($collection_field, implode('|',array_keys($collection_data)));
-				}
-
+		foreach ($decoded_data as $collection_field => $collection_data) {
+			if (str_contains($collection_field, 'meta')) {
+				// Force field ordering
+				$data = [
+					'value' => $collection_data['value'] ?? '',
+					'namespace' => $collection_data['namespace'] ?? '',
+					'description' => $collection_data['description'] ?? '',
+				];
+				$product->add_datum($collection_field, json_encode($data));
+			} else {
+				$product->add_datum($collection_field, implode('|', array_keys($collection_data)));
 			}
 		}
 
 		return $product;
 	}
+
 	/**
 	 * @inheritDoc
 	 */
@@ -174,30 +164,28 @@ class Collections implements iModule
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_product, $product->id);
-		$collections = [];
-
-		foreach ($result as $row) {
-			if ($row === false) {
-				throw new \Exception('Error while retrieving data for individual product: ' . $this->get_module_name());
-			}
-
-			if (empty($row['data'])) {
-				continue;
-			}
-
-			$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
-			$collections[$row['id']] = $decoded_data;
+		$row = $result->fetch_assoc();
+		if ($row === false) {
+			throw new \Exception('Error while retrieving data for individual product: ' . $this->get_module_name());
 		}
 
-		foreach ($collections as $product_id=>$collection) {
-			foreach ($collection as $collection_field=>$collection_data) {
-				//echo "\n\n" . $collection_field . "\n" . json_encode($collection_data) . "\n" . implode('|',array_keys($collection_data));
-				if (str_contains($collection_field,'meta')) {
-					$product->add_datum($collection_field, json_encode($collection_data));
-				} else {
-					$product->add_datum($collection_field, implode('|',array_keys($collection_data)));
-				}
+		if (empty($row['data'])) {
+			return;
+		}
 
+		$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
+
+		foreach ($decoded_data as $collection_field => $collection_data) {
+			if (str_contains($collection_field, 'meta')) {
+				// Force field ordering
+				$data = [
+					'value' => $collection_data['value'] ?? '',
+					'namespace' => $collection_data['namespace'] ?? '',
+					'description' => $collection_data['description'] ?? '',
+				];
+				$product->add_datum($collection_field, json_encode($data));
+			} else {
+				$product->add_datum($collection_field, implode('|', array_keys($collection_data)));
 			}
 		}
 	}
@@ -207,7 +195,7 @@ class Collections implements iModule
 	 */
 	public function add_data_to_variant(MysqliWrapper $cxn, ProductVariant $variant) : void
 	{
-		//
+		// Not applicable to variants
 	}
 
 }

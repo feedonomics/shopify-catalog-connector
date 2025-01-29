@@ -2,11 +2,14 @@
 namespace ShopifyConnector\connectors\shopify;
 
 use ShopifyConnector\connectors\shopify\models\FilterManager;
+
 use ShopifyConnector\exceptions\ValidationException;
 
 /**
  * Utility for parsing and managing a list of meta filters for pulling
  * meta data from Shopify
+ *
+ * TODO: Move this into metafields/ directory?
  */
 class MetaFilterManager extends FilterManager
 {

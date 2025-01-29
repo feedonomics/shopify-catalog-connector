@@ -4,9 +4,12 @@ namespace ShopifyConnector\connectors\shopify\models;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\ShopifyUtilities;
-use JsonException;
-use ShopifyConnector\exceptions\ApiResponseException;
+
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use ShopifyConnector\util\io\DataUtilities;
+use ShopifyConnector\util\io\InputParser;
+
+use JsonException;
 
 /**
  * Model for a Shopify product variant.
@@ -67,11 +70,8 @@ final class ProductVariant extends FieldHaver
 		'material',
 		'additional_variant_image_link',
 		'variant_names',
-
-		# Added conditionally:
-		'presentment_prices',
-		#'gmc_transition_id',
 	];
+
 
 	/**
 	 * Map for fields that are referred to by different names in the FDX
@@ -141,10 +141,11 @@ final class ProductVariant extends FieldHaver
 	 *
 	 * @param string $field The name of the field to get the processed value for
 	 * @return mixed The processed value for the specified field
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_processed_value(string $field)
 	{
+		# TODO: Default to '' for ids good or bad?
 		switch ($field) {
 			/* IDs are currently being handled not as GIDs internally
 			case 'id':
@@ -155,7 +156,8 @@ final class ProductVariant extends FieldHaver
 			*/
 
 			case 'inventory_item_id':
-				return (new GID($this->get('inventoryItem', '', false)['id']))->get_id();
+				$iid = $this->get('inventoryItem', [], false)['id'] ?? null;
+				return $iid !== null ? (new GID($iid))->get_id() : '';
 
 			case 'inventory_quantity':
 				return $this->get('inventoryQuantity', '', false);
@@ -186,7 +188,7 @@ final class ProductVariant extends FieldHaver
 				return $this->get('inventoryItem', []) ? 'true' : 'false';
 				
 			case 'taxable':
-				return $this->get('taxable', false,) ? 'true' : 'false';
+				return $this->get('taxable', false,) ? 'true' : 'false';;
 
 			case 'availability':
 				return $this->get_availability();
@@ -232,12 +234,13 @@ final class ProductVariant extends FieldHaver
 	 *
 	 * @param string $domain The Shopify store's base URL
 	 * @return string The product link for this variant
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_link(string $domain) : string
 	{
 		$url_parts = parse_url("https://{$domain}");
 		if ($url_parts === false) {
+			# TODO: Log info? Add test case
 			return '';
 		}
 
@@ -257,10 +260,10 @@ final class ProductVariant extends FieldHaver
 	/**
 	 * Get the presentment_prices for this variant.
 	 *
-	 * @return ?string The presentment_prices as a JSON-encoded string
-	 * @throws ApiResponseException On invalid data
+	 * @return string The presentment_prices as a JSON-encoded string
+	 * @throws UnexpectedResponseException On invalid data
 	 */
-	public function get_presentment_prices() : ?string
+	public function get_presentment_prices() : string
 	{
 		$prices = $this->get('presentment_prices', []);
 		return json_encode($prices);
@@ -269,10 +272,10 @@ final class ProductVariant extends FieldHaver
 	/**
 	 * Get the price data for this variant.
 	 *
-	 * @return ?string The price as a string
-	 * @throws ApiResponseException On invalid data
+	 * @return string The price as a string
+	 * @throws UnexpectedResponseException On invalid data
 	 */
-	public function get_price() : ?string
+	public function get_price() : string
 	{
 		$compare_at_price = $this->get('compareAtPrice', '') ?? '';
 		$display_price = $this->get('price', '') ?? '';
@@ -288,7 +291,7 @@ final class ProductVariant extends FieldHaver
 	 * Get the sale price for this variant.
 	 *
 	 * @return string The sale price as a string
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_sale_price() : string
 	{
@@ -306,17 +309,19 @@ final class ProductVariant extends FieldHaver
 	 * Get this variant's availability.
 	 *
 	 * @return string The availability string for this variant
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_availability() : string
 	{
 		if ($this->get('availableForSale') !== null) {
-			# Maybe the new GQL way:
+			# This field is deprecated
+			$im = strtolower($this->get('inventoryManagement', '', false));
+			$ip = strtolower($this->get('inventoryPolicy', '', false));
+			$iq = $this->get('inventoryQuantity', '', false);
 
-			return $this->get('availableForSale') === false
+			return ($im === 'shopify' && $iq < 1 && $ip === 'deny')
 				? self::STR_NOT_AVAILABLE
-				: self::STR_AVAILABLE
-			;
+				: self::STR_AVAILABLE;
 
 		} else {
 			# The old REST API way:
@@ -348,7 +353,7 @@ final class ProductVariant extends FieldHaver
 	 * "unit" and "value" keys.
 	 *
 	 * @return Array<string, mixed> An array that is guaranteed to conform to the weight node structure
-	 * @throws ApiResponseException
+	 * @throws UnexpectedResponseException
 	 */
 	private function get_weight_node() : array
 	{
@@ -419,8 +424,10 @@ final class ProductVariant extends FieldHaver
 	/**
 	 * Get a comma-separated list of image links for this variant.
 	 *
+	 * TODO: This and other image-related things need to be updated for GQL
+	 *
 	 * @return string The list of image links
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_image_link() : string
 	{
@@ -436,7 +443,7 @@ final class ProductVariant extends FieldHaver
 	 *
 	 * @param string $name The name of the option to get the value of
 	 * @return string The value of the named option
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_option_value(string $name) : string
 	{
@@ -451,7 +458,7 @@ final class ProductVariant extends FieldHaver
 	 * Get the variant image links
 	 *
 	 * @return string The list of additional image links
-	 * @throws ApiResponseException On invalid data
+	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_additional_image_links() : string
 	{
@@ -482,12 +489,20 @@ final class ProductVariant extends FieldHaver
 
 	/**
 	 * Generate and return a list of the variant names for this product.
+	 * <hr>
+	 * TODO:
+	 * - Is this looking in the right place for the option values?
+	 *   - Need to get from fields['option'] instead of direct?
+	 * - Current seems to default to "Title" when no options set
+	 *   - Where/How does this happen?
+	 * - Would it be better to iterate variant's option array instead of parent's options
 	 *
 	 * @return string The variant names
-	 * @throws ApiResponseException On errors encoding the variant names
+	 * @throws UnexpectedResponseException On errors encoding the variant names
 	 */
 	public function generate_variant_names() : string
 	{
+
 		// example "options":[{"name":"Color","position":1,"values":["Charcoal","Periwinkle"]}]
 		$vnames = [];
 		foreach ($this->product->get('options', []) ?? [] as $opt) {
@@ -498,53 +513,11 @@ final class ProductVariant extends FieldHaver
 		try {
 			return json_encode($vnames, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR);
 		} catch(JsonException $e){
-			throw new ApiResponseException(sprintf(
+			throw new UnexpectedResponseException('shopify', sprintf(
 				'Could not parse variant names. Reason: %s',
 				$e->getMessage()
 			));
 		}
-	}
-
-	/**
-	 * @inheritDoc
-	 *
-	 * @deprecated Review and clean up
-	 *
-	 * The params expected by this generator are:
-	 *   domain - (string) The shop's domain
-	 *   mfSplit - (bool) Value of metafields_split_columns option
-	 *   extra_fields - (array) Additional fields to include in the output
-	 */
-	public function get_output_data_old(array $params = [], ?array $baseFields = null) : array
-	{
-		$only_fields = $baseFields !== null ? $baseFields : self::DEFAULT_OUTPUT_FIELDS;
-		$only_fields = array_combine($only_fields, $only_fields);
-
-		$extra_fields = $params['extra_fields'] ?? [];
-		$extra_fields = array_combine($extra_fields, $extra_fields);
-
-		$this->active_params = $params;
-
-		#
-		# Return any fields explicitly requested by the client, along with
-		# a standard set of fields and metafields if requested, performing
-		# processing on certain fields.
-		#
-		# Order of precedence from low to high is:
-		#   - additional requested fields
-		#   - standard/listed fields with processing
-		#   - meta fields
-		#
-		$ret = array_merge(
-			array_map([$this, 'get_processed_value'], $extra_fields),
-			array_map([$this, 'get_processed_value'], $only_fields),
-			#$this->getMetafieldOutput((bool)($params['mfSplit'] ?? false))
-		);
-
-		# Set back to empty array when done because it's not meant to persist
-		$this->active_params = [];
-
-		return $ret;
 	}
 
 }

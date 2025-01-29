@@ -3,6 +3,9 @@
 namespace ShopifyConnector\connectors\shopify\models;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
+
+use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+
 use JsonSerializable;
 
 /**
@@ -11,36 +14,22 @@ use JsonSerializable;
 final class Collection extends FieldHaver implements JsonSerializable
 {
 
-	const TYPE_PRODUCT = 1;
-	const TYPE_VARIANT = 2;
-	const TYPE_COLLECTION = 3;
-
-
-	private int $type;
-
-
 	/**
 	 * Set up a new Collection object with the given data. The "__parentId"
 	 * key will be removed from the data, if present.
 	 *
 	 * @param array $fields The data for the Collection
 	 */
-	public function __construct(array $fields, int $type)
+	public function __construct(array $fields)
 	{
 		unset($fields['__parentId']);
-		parent::__construct($fields);
 
-		$this->type = $type;
-	}
+		$data = [];
+		foreach ($fields as $c_field => $c_data) {
+			$data[$c_field] = $c_data;
+		}
 
-	/**
-	 * Get the tag appropriate to the type of collection this is.
-	 *
-	 * @return string Tag for use in field names
-	 */
-	private function get_type_tag() : string
-	{
-		return '';
+		parent::__construct($data);
 	}
 
 	/**
@@ -74,24 +63,8 @@ final class Collection extends FieldHaver implements JsonSerializable
 	 */
 	public function get_output_data(?array $field_list = null) : array
 	{
-		$data = [
-			'translations' => $this->get('translations', ''),
-		];
-		$session = SessionContainer::get_active_session();
-
-		return $data;
-	}
-
-
-	/**
-	 * @return [] No variant translations
-	 */
-	public function get_variants() : array
-	{
 		return [];
 	}
 
-
 }
-
 
