@@ -25,8 +25,6 @@ namespace ShopifyConnector\util\io;
  * // 1,abc,bla bla bla
  * // 2,,bla2 bla2 bla2
  * ```
- *
- * @package feedonomics\preprocess\util\io
  */
 final class OutputTemplate {
 

@@ -42,7 +42,7 @@ class ShopifyModular_v4 extends ShopifyModular {
 		$client_options['escape'] = "\\";
 		$client_options['strip_characters'] = [];
 
-		parent::__construct($client_options);
+		parent::__construct($client_options, []);
 	}
 
 

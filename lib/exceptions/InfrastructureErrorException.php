@@ -2,8 +2,6 @@
 
 namespace ShopifyConnector\exceptions;
 
-use ShopifyConnector\util\log\ErrorLogger;
-
 
 /**
  * Exception for whenever an internal, sensitive error occurs. This will output

@@ -61,7 +61,7 @@ class ShopifyModular_v2 extends ShopifyModular {
 			'parent_image_links'     => 'additional_image_link',
 		];
 
-		parent::__construct($client_options);
+		parent::__construct($client_options, []);
 	}
 
 

@@ -362,7 +362,6 @@ final class OneOffPresentmentPuller {
 		if($sres->status !== self::STATUS_WAITING){
 			$this->devOutput('Finished bulk query submit with non-waiting status: ');
 			$this->devOutput($res, true);
-			# TODO: log?
 		}
 
 		$rdata = $this->pollForBulkComplete($sres->id);

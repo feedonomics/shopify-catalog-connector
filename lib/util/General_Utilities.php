@@ -169,7 +169,7 @@ class General_Utilities {
 		$crawl_data_string = json_encode(array_merge(
 			$unique_data,
 			[
-				'feedonomics_debugging_information' => [
+				'debugging_information' => [
 					'process_ids' => [
 						getmypid()
 					],

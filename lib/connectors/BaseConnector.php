@@ -91,9 +91,6 @@ abstract class BaseConnector {
 	 * @param array $ci The set of connection info parameters to use
 	 */
 	private function set_connection_info(array $ci) : void {
-		# TODO: reworked validation
-		//(new PreprocessConnectionValidator())->validate($ci);
-
 		if(isset($ci['host'])){
 			$ci['host'] = rtrim($ci['host'], '/');
 		}
@@ -134,33 +131,6 @@ abstract class BaseConnector {
 
 
 	/**
-	 * Helper passthru to File_Utilities version of
-	 * {@see File_Utilities::fput_delimited()}.
-	 *
-	 * TODO: Confirm we don't actually need this
-	 */ /*
-	private function fput_delimited(
-		$fp,
-		$fields,
-		$delimiter = ',',
-		$enclosure = '"',
-		$escape_char = '"',
-		$strip_characters = array(),
-		$replace = ''
-	){
-		File_Utilities::fput_delimited(
-			$fp,
-			$fields,
-			$delimiter,
-			$enclosure,
-			$escape_char,
-			$strip_characters,
-			$replace
-		);
-	} */
-
-
-	/**
 	 * Pull and process data based on the request parameters; this is the main
 	 * import entry point. This method sets up a temporary file to hold
 	 * processed data, which subclasses will write to in their {@see export()}
@@ -181,8 +151,6 @@ abstract class BaseConnector {
 		$me = $this;
 		$this->export(
 			function ($row, $delimit_info = []) use ($fp, $me) {
-				// TODO: Confirm helper not needed, then get rid of $me too
-				//$me->fput_delimited($fp, $row, ...$delimit_info);
 				File_Utilities::fput_delimited($fp, $row, ...$delimit_info);
 			}
 		);
@@ -239,7 +207,6 @@ abstract class BaseConnector {
 		}
 		$fsize = filesize($fpath);
 		if($fsize !== false && !headers_sent()){
-			# TODO: Error or silently skip?
 			header("Content-Length: {$fsize}");
 		}
 
@@ -283,11 +250,11 @@ abstract class BaseConnector {
 		switch($this->file_info['request_type'] ?? 'get'){
 			case 'get':
 				$this->output_file($this->pull_data());
-				break;
+			break;
 
 			case 'list':
 				$this->get_api_info();
-				break;
+			break;
 
 			default:
 				throw new ValidationException('Invalid request type specified');

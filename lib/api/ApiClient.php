@@ -22,12 +22,12 @@ final class ApiClient {
 	/**
 	 * @var string The REST API version to be used
 	 */
-	const REST_VERSION = '2022-10';
+	const REST_VERSION = '2024-04';
 
 	/**
 	 * @var string The Graphql version to be used
 	 */
-	const GRAPHQL_VERSION = '2022-10';
+	const GRAPHQL_VERSION = '2024-04';
 
 	/**
 	 * @var ?string Store for the shop code
@@ -105,7 +105,7 @@ final class ApiClient {
 	 * option in the Guzzle constructor)
 	 *
 	 * @param string $proxy The full proxy URL (including username/password)
-	 * <p>E.G. https://admin:password@proxy.feedonomics.com</p>
+	 * <p>E.G. https://admin:password@proxy.url.com</p>
 	 */
 	public function setProxy(string $proxy){
 		$this->proxy = $proxy;

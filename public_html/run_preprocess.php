@@ -37,8 +37,6 @@ try {
 	$file_info       = $args['file_info'] ?? [];
 
 	//// ShopifyModular compatibility translation
-	// TODO Eventually all shopify implementations will be using the new modularized code,
-	//   and the others will be deprecated and removed along with this translation logic
 	$is_modular_shopify_implicitly = $connection_info['client'] === 'shopify' && (
 		isset($connection_info['data_types']) // New implementations using data_types
 		||
@@ -72,43 +70,8 @@ try {
 		$connection_info['client'] = 'shopifymodular';
 	}
 
-	// ShopifyModular uses parallel processing
-	if($connection_info['client'] === 'shopifymodular'){
-		$output_compressed = InputParser::extract_boolean($file_info, 'output_compressed');
-
-		$prunner_path = "{$GLOBALS['file_paths']['base_path']}/cli/parallel_preprocess.php";
-		if(empty($GLOBALS['file_paths']['base_path']) || !file_exists($prunner_path)){
-			// Small safety check before attempting to execute
-			throw new CustomException(
-				'internal_error',
-				'Parallel processing misconfigured, please contact support'
-			);
-		}
-
-		$esc_parallel_runner = escapeshellarg($prunner_path);
-		$esc_json_cxn_info = escapeshellarg(json_encode($connection_info, 16, JSON_THROW_ON_ERROR));
-		$esc_json_file_info = escapeshellarg(json_encode($file_info, 16, JSON_THROW_ON_ERROR));
-
-		$descriptor_spec = [
-			0 => ["pipe", "r"],   // stdin is a pipe that the child will read from
-			1 => ["pipe", "w"],   // stdout is a pipe that the child will write to
-			2 => ["pipe", "w"]    // stderr is a pipe that the child will write to
-		];
-
-		// WARNING error handler does not cross new script calls
-		$process = proc_open(
-			"php -f {$esc_parallel_runner} {$esc_json_cxn_info} {$esc_json_file_info}",
-			$descriptor_spec,
-			$pipes
-		);
-
-		$process_handler = new ProcessHandler($process, $pipes, $output_compressed);
-		$process_handler->handle_process();
-
-	} else {
-		$connector = ConnectorFactory::getConnector($connection_info, $file_info);
-		$connector->run();
-	}
+	$connector = ConnectorFactory::getConnector($connection_info, $file_info);
+	$connector->run();
 
 } catch (ApiException $e){
 	(new ApiResponseException($e->getMessage()))->end_process();
