@@ -279,7 +279,7 @@ final class OneOffPresentmentPuller {
 	 * @throws ApiException
 	 */
 	public function runQuery(string $query){
-		return $this->client->graphqlRequest($query);
+		return $this->client->graphql_request($query);
 	}
 
 

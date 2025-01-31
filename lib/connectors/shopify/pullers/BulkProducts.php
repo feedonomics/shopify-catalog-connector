@@ -237,7 +237,6 @@ class BulkProducts extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
-		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/products_bulk_copy'); # TODO: Just for debug/dev
 
 		$pull_stats = $this->session->pull_stats[Products::MODULE_NAME];
 		$fh = $this->checked_open_file($filename);

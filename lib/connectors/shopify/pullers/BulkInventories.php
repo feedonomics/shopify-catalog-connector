@@ -82,7 +82,6 @@ class BulkInventories extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
-		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/inventory_bulk_copy'); # TODO: Just for debug/dev
 
 		$fh = $this->checked_open_file($filename);
 
