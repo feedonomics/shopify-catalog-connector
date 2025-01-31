@@ -76,7 +76,7 @@ final class Inventory extends FieldHaver
 		}
 
 		return json_encode([
-			'id' => $item['id'],
+			'id' => (int)$item['id'],
 			'sku' => $item['sku'],
 			'cost' => $item['cost'],
 			'currency' => $item['currency'],
@@ -96,14 +96,15 @@ final class Inventory extends FieldHaver
 		$formatted_levels = [];
 		foreach ($levels as $location_level) {
 			$formatted_levels[] = [
-				'inventory_item_id' => $location_level['inventory_item_id'],
-				'location_id' => $location_level['location_id'],
+				'inventory_item_id' => (int)$location_level['inventory_item_id'],
+				'location_id' => (int)$location_level['location_id'],
 				'available' => $location_level['available'],
 				'location_name' => $location_level['location_name'],
 			];
 		}
 
-		return $formatted_levels;
+		return array_reverse($formatted_levels);
 	}
 
 }
+

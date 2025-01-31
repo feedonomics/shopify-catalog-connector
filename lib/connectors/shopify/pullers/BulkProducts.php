@@ -3,6 +3,7 @@
 namespace ShopifyConnector\connectors\shopify\pullers;
 
 use ShopifyConnector\connectors\shopify\ProductFilterManager;
+use ShopifyConnector\connectors\shopify\ShopifyUtilities;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\products\Products;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
@@ -125,6 +126,7 @@ class BulkProducts extends BulkBase
 						description
 						descriptionHtml
 						handle
+
 						media{$media_filter} {
 							edges {
 								node {
@@ -142,6 +144,7 @@ class BulkProducts extends BulkBase
 								}
 							}
 						}
+
 						onlineStorePreviewUrl
 						options {
 							name
@@ -159,7 +162,9 @@ class BulkProducts extends BulkBase
 						title
 						updatedAt
 						vendor
+
 						{$allowed_extra_parent_fields}
+
 						variants {
 							edges {
 								node {
@@ -170,6 +175,7 @@ class BulkProducts extends BulkBase
 									barcode
 									createdAt
 									displayName
+
 									image {
 										id
 										altText
@@ -177,6 +183,7 @@ class BulkProducts extends BulkBase
 										width
 										url
 									}
+
 									inventoryItem {
 										id
 										measurement {
@@ -189,12 +196,14 @@ class BulkProducts extends BulkBase
 										sku
 										tracked
 									}
+
 									inventoryManagement
 									fulfillmentService {
 			  							handle
 									}
 									inventoryQuantity
 									inventoryPolicy
+
 									position
 									price
 									compareAtPrice
@@ -254,9 +263,13 @@ class BulkProducts extends BulkBase
 						}
 						continue;
 					} else {
+						$this->generic_exception(
+							'Unexpected format in bulk products response (gid); declining to continue',
+							'processing'
+						);
 						// TODO: Error? Log something? Different behavior?
-						++$pull_stats->general_errors;
-						continue;
+						//++$pull_stats->general_errors;
+						//continue;
 					}
 				} else {
 					$gid = new GID($decoded['id']);
@@ -312,8 +325,11 @@ class BulkProducts extends BulkBase
 					$variant_data['media'] = [];
 
 					if ($this->session->settings->variant_names_split_columns) {
-						$identifier = 'variant_' . strtolower($variant_data['selectedOptions'][0]['name']);
-						$variant_names[$identifier] = true;
+						foreach ($variant_data['selectedOptions'] ?? [] as $variant_option) {
+							$identifier = 'variant_' . strtolower($variant_option['name']);
+							//$identifier = ShopifyUtilities::clean_column_name($identifier, '_');
+							$variant_names[$identifier] = true;
+						}
 					}
 
 				} elseif ($gid->is_media()) {
@@ -333,6 +349,7 @@ class BulkProducts extends BulkBase
 						'width' => $decoded['preview']['image']['height'] ?? null,
 						// "src" for compatibility; should switch to using "url" naming
 						'src' => $decoded['preview']['image']['url'] ?? null,
+						'altText' => $decoded['preview']['image']['altText'] ?? null,
 					];
 
 					if ($media_data['src'] === null) {
@@ -350,6 +367,23 @@ class BulkProducts extends BulkBase
 					# I guess just silently skip...
 					++$pull_stats->warnings;
 				}
+			}
+
+			// Store the last product and variant datas
+			if ($product_data !== null) {
+				$insert_product->add_value_set($cxn, [
+					Products::COLUMN_ID => $product_data['id'],
+					Products::COLUMN_DATA => json_encode($product_data),
+				]);
+				++$pull_stats->products;
+			}
+			if ($variant_data !== null) {
+				$insert_variant->add_value_set($cxn, [
+					Products::COLUMN_ID => $variant_data['id'],
+					Products::COLUMN_PARENT_ID => $product_data['id'],
+					Products::COLUMN_DATA => json_encode($variant_data),
+				]);
+				++$pull_stats->variants;
 			}
 
 			// Commit anything remaining in the batched inserters

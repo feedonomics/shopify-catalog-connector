@@ -4,7 +4,6 @@ namespace ShopifyConnector\connectors\shopify\pullers;
 
 use ShopifyConnector\connectors\shopify\collections\Collections;
 use ShopifyConnector\connectors\shopify\models\GID;
-use ShopifyConnector\connectors\shopify\models\Collection;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
 
 use ShopifyConnector\util\db\MysqliWrapper;
@@ -83,15 +82,9 @@ class BulkCollections extends BulkBase
 		$fh = $this->checked_open_file($filename);
 
 		try {
-			$product_id = null;
-			$variant_id = null;
-			$last_pid_data_added_for = null;
-			$last_vid_data_added_for = null;
-			$decoded = null;
-			$products = [];
 			$collections = [];
-			$collection_ids = [];
 			$metafields = [];
+			$product_collections = [];
 
 			while (!feof($fh)) {
 				$line = $this->checked_read_line($fh);
@@ -100,51 +93,64 @@ class BulkCollections extends BulkBase
 				}
 
 				$decoded = json_decode($line, true, 128, JSON_THROW_ON_ERROR);
-
 				if (empty($decoded['id'])) {
 					continue;
 				}
+
 				$gid = new GID($decoded['id']);
-				if ($gid->is_product()) {
-					$product_id = $gid->get_id();
-					$collection_id = new GID($decoded['__parentId']);
-					$collection_id = $collection_id->get_id();
-					$decoded['id'] = $collection_id;
-					$collection_ids[$product_id][] = $collection_id;
-				} elseif ($gid->is_collection()) {
+
+				if ($gid->is_collection()) {
 					$collection_id = $gid->get_id();
-					$decoded['id'] = $collection_id;
-					foreach($decoded as $key=>$value) {
-						$collections[$collection_id][$key] = $value;
-					}
+					$collections[$collection_id] = $decoded;
+
 				} elseif ($gid->is_metafield()) {
-					$collection_id = new GID($decoded['__parentId']);
-					$collection_id = $collection_id->get_id();
+					$collection_id = (new GID($decoded['__parentId']))->get_id();
 					unset($decoded['id']);
 					unset($decoded['__parentId']);
-					$metafields[$collection_id] = $decoded;
+					$metafields[$collection_id][] = $decoded;
+
+				} elseif ($gid->is_product()) {
+					$product_id = $gid->get_id();
+					$collection_id = (new GID($decoded['__parentId']))->get_id();
+					$product_collections[$product_id][] = $collection_id;
 				}
 			}
+
 			// rows are
-			foreach ($collection_ids as $product_id=>$array) { // Run through Products
-				foreach($array as $id) { // Run through Collections linked to single Product
-					if (is_null($collections[$id]['ruleSet'])) { // Custom
-						$output_collections[$product_id]['custom_collections_handle'][$collections[$id]['handle']] = true;
-						$output_collections[$product_id]['custom_collections_title'][$collections[$id]['title']] = true;
-						$output_collections[$product_id]['custom_collections_id'][$collections[$id]['id']] = true;
-						$output_collections[$product_id]['custom_collections_meta'][$id] = [$metafields[$id] ?? ''];
-					} else { // Smart
-						$output_collections[$product_id]['smart_collections_handle'][$collections[$id]['handle']] = true;
-						$output_collections[$product_id]['smart_collections_title'][$collections[$id]['title']] = true;
-						$output_collections[$product_id]['smart_collections_id'][$collections[$id]['id']] = true;
-						$output_collections[$product_id]['smart_collections_meta'][$id] = [$metafields[$id] ?? ''];
+			foreach ($product_collections as $product_id => $collection_ids) { // Run through Products
+				$output = [];
+
+				foreach($collection_ids as $c_id) { // Run through Collections linked to single Product
+					$collection = $collections[$c_id];
+					$collection_id = '';
+					try {
+						$collection_id = (new GID($collection['id']))->get_id();
+					} catch(\Throwable $e) { /* Fuhgeddaboudit */ }
+
+					// Determine if "custom" or "smart" collection based on the presence of a ruleSet
+					if ($collection['ruleSet'] === null) {
+						$output[$c_id] = [
+							'custom_collections_handle' => $collection['handle'],
+							'custom_collections_title' => $collection['title'],
+							'custom_collections_id' => $collection_id,
+							'custom_collections_meta' => $metafields[$c_id] ?? [],
+						];
+					} else {
+						$output[$c_id] = [
+							'smart_collections_handle' => $collection['handle'],
+							'smart_collections_title' => $collection['title'],
+							'smart_collections_id' => $collection_id,
+							'smart_collections_meta' => $metafields[$c_id] ?? [],
+						];
 					}
 				}
+
 				$insert_product->add_value_set($cxn, [
 					Collections::COLUMN_ID => $product_id,
-					Collections::COLUMN_DATA => json_encode($output_collections[$product_id]),
+					Collections::COLUMN_DATA => json_encode($output),
 				]);
 			}
+
 			// Commit anything remaining in the batched inserters
 			$insert_product->run_query($cxn);
 

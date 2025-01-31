@@ -27,4 +27,9 @@ final class ShopifyUtilities
 		return "{$scheme}{$user}{$pass}{$host}{$port}{$path}{$query}{$fragment}";
 	}
 
+	public static function clean_column_name(string $name, string $replace_char = '') : string
+	{
+		return preg_replace('/[^0-9,a-zA-Z$_\x{0080}-\x{FFFF}]/u', $replace_char, $name);
+	}
+
 }

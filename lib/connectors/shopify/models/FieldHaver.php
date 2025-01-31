@@ -3,7 +3,7 @@
 namespace ShopifyConnector\connectors\shopify\models;
 
 use ShopifyConnector\exceptions\api\UnexpectedResponseException;
-use ShopifyConnector\exceptions\ValidationException;
+
 
 /**
  * Base class for models that contain accessible fields and that will
@@ -18,7 +18,7 @@ abstract class FieldHaver
 	/**
 	 * @var array Store for the field data
 	 */
-	private array $fields;
+	private array $fields = [];
 
 	/**
 	 * Setup for the fields that should be exposed through the `get` method.

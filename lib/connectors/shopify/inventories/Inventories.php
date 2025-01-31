@@ -12,8 +12,8 @@ use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
 
 use ShopifyConnector\util\db\MysqliWrapper;
-use ShopifyConnector\util\db\TableHandle;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
+use ShopifyConnector\util\db\TableHandle;
 
 use Generator;
 
@@ -80,7 +80,7 @@ class Inventories implements iModule
 		$puller = new BulkInventories($this->session);
 		// The puller requires 2 inserters. Rather than setting up a dummy table and inserter for
 		// products, we will just pass the variant inserter twice and the puller will ignore it.
-		$processing_result = $puller->do_bulk_pull($cxn, $insert_variant, $insert_variant);
+		$puller->do_bulk_pull($cxn, $insert_variant, $insert_variant);
 	}
 
 	/**
@@ -139,6 +139,8 @@ class Inventories implements iModule
 	/**
 	 * Inventories should always be the primary module when involved in pulls, so this
 	 * implementation shouldn't really be needed, but included in case.
+	 *
+	 * The `inventory_level_explode` option will have no effect here.
 	 *
 	 * @inheritDoc
 	 */

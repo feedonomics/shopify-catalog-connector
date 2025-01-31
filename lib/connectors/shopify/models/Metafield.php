@@ -3,8 +3,7 @@
 namespace ShopifyConnector\connectors\shopify\models;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
-
-use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+use ShopifyConnector\connectors\shopify\ShopifyUtilities;
 
 use JsonSerializable;
 
@@ -76,7 +75,7 @@ final class Metafield extends FieldHaver implements JsonSerializable
 		;
 
 		$identifier = "{$mf_type}_{$mf_ns}{$mf_key}";
-		return preg_replace('/[^0-9,a-zA-Z$_\x{0080}-\x{FFFF}]/u', '', $identifier);
+		return ShopifyUtilities::clean_column_name($identifier);
 	}
 
 	/**
@@ -97,10 +96,10 @@ final class Metafield extends FieldHaver implements JsonSerializable
 	public function get_output_data(?array $field_list = null) : array
 	{
 		$data = [
-			'namespace' => $this->get('namespace', ''),
 			'key' => $this->get('key', ''),
-			'description' => $this->get('descriptionHtml', ''),
 			'value' => $this->get('value', ''),
+			'namespace' => $this->get('namespace', ''),
+			'description' => $this->get('descriptionHtml', ''),
 		];
 
 		$session = SessionContainer::get_active_session();
