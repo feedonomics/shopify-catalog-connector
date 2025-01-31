@@ -99,7 +99,7 @@ final class Metafield extends FieldHaver implements JsonSerializable
 			'key' => $this->get('key', ''),
 			'value' => $this->get('value', ''),
 			'namespace' => $this->get('namespace', ''),
-			'description' => $this->get('descriptionHtml', ''),
+			'description' => $this->get('description', '') ?? '',
 		];
 
 		$session = SessionContainer::get_active_session();
