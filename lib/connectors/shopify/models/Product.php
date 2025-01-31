@@ -141,7 +141,7 @@ final class Product extends FieldHaver
 				return $this->get('productType', '');
 
 			case 'tags':
-				return implode(',', $this->get('tags', []));
+				return implode(', ', $this->get('tags', []));
 
 			case 'published_status':
 				return $this->get_published_status();

@@ -82,6 +82,7 @@ class BulkInventories extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
+		//copy($filename, '/var/www/feedonomics-import-scripts/tmp/inventory_bulk_copy'); # TODO: Just for debug/dev
 
 		$fh = $this->checked_open_file($filename);
 
@@ -97,28 +98,26 @@ class BulkInventories extends BulkBase
 				}
 
 				$decoded = json_decode($line, true, 128, JSON_THROW_ON_ERROR);
-
 				if (empty($decoded['id'])) {
 					continue;
 				}
 
 				$gid = new GID($decoded['id']);
-				if (isset($decoded['inventoryItem']['id'])) {
-				}
 
 				if ($gid->is_variant()) {
 					if ($last_variant_data !== null) {
 						$inventory_item = [
 							'id' => $last_inv_item_id,
-							'sku' => $last_variant_data['inventoryItem']['sku'] ?? '',
-							'cost' => $last_variant_data['inventoryItem']['unitCost']['amount'] ?? 'null',
-							'currency' => $last_variant_data['inventoryItem']['unitCost']['currencyCode'] ?? 'null',
+							'sku' => $last_variant_data['inventoryItem']['sku'],
+							'cost' => $last_variant_data['inventoryItem']['unitCost']['amount'] ?? null,
+							'currency' => $last_variant_data['inventoryItem']['unitCost']['currencyCode'] ?? null,
 						];
 
-						$parent_id = new GID($last_variant_data['product']['id']);
+						$last_variant_id = new GID($last_variant_data['id']);
+						$last_parent_id = new GID($last_variant_data['product']['id']);
 						$insert_variant->add_value_set($cxn, [
-							Inventories::COLUMN_ID => $gid->get_id(),
-							Inventories::COLUMN_PARENT_ID => $parent_id->get_id(),
+							Inventories::COLUMN_ID => $last_variant_id->get_id(),
+							Inventories::COLUMN_PARENT_ID => $last_parent_id->get_id(),
 							Inventories::COLUMN_DATA => json_encode([
 								'item' => $inventory_item,
 								'levels' => $levels_accumulator,
@@ -136,8 +135,8 @@ class BulkInventories extends BulkBase
 					$loc_id = $loc_id === null ? null : (new GID($loc_id))->get_id();
 
 					$quantity = null;
-					foreach($decoded['quantities'] ?? [] as $q){
-						if(strtolower($q['name']) === 'available'){
+					foreach ($decoded['quantities'] ?? [] as $q) {
+						if (strtolower($q['name']) === 'available') {
 							$quantity = $q['quantity'] ?? 0;
 							break;
 						}
@@ -156,6 +155,27 @@ class BulkInventories extends BulkBase
 				}
 			}
 
+			// Store the remaining data after reaching the end of the file
+			if ($last_variant_data !== null && !empty($gid)) {
+				$inventory_item = [
+					'id' => (int)$last_inv_item_id,
+					'sku' => $last_variant_data['inventoryItem']['sku'],
+					'cost' => $last_variant_data['inventoryItem']['unitCost']['amount'] ?? null,
+					'currency' => $last_variant_data['inventoryItem']['unitCost']['currencyCode'] ?? null,
+				];
+
+				$last_variant_id = new GID($last_variant_data['id']);
+				$last_parent_id = new GID($last_variant_data['product']['id']);
+				$insert_variant->add_value_set($cxn, [
+					Inventories::COLUMN_ID => $last_variant_id->get_id(),
+					Inventories::COLUMN_PARENT_ID => $last_parent_id->get_id(),
+					Inventories::COLUMN_DATA => json_encode([
+						'item' => $inventory_item,
+						'levels' => $levels_accumulator,
+					])
+				]);
+			}
+
 			// Commit anything remaining in the batched inserters
 			$insert_variant->run_query($cxn);
 
@@ -164,5 +184,6 @@ class BulkInventories extends BulkBase
 		}
 
 	}
+
 }
 

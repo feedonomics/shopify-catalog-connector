@@ -1,6 +1,7 @@
 <?php
 namespace ShopifyConnector\connectors\shopify\models;
 
+use ShopifyConnector\connectors\shopify\exceptions\BulkErrorException;
 use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 
 /**
@@ -136,9 +137,11 @@ class BulkResult
 		}
 
 		$errors = $this->getUserErrNode($tree);
-		throw new UnexpectedResponseException(
-			'Shopify',
-			'Unable to find bulkOp response data. Messages: ' . print_r($errors, true)
+		$dump = !empty($errors) ? $errors : $tree;
+
+		throw new BulkErrorException(
+			$errors,
+			'Unable to find bulkOp response data. Messages: ' . print_r($dump, true)
 		);
 	}
 
@@ -152,33 +155,15 @@ class BulkResult
 	 */
 	private function getUserErrNode(array $tree) : array
 	{
-		$node = $tree['data']['bulkOperationRunQuery']['userErrors'] ?? null;
-		return is_array($node) ? $node : [];
-	}
-
-	/**
-	 * Checks in the userErrors for indicators that the query run attempt was
-	 * blocked by another query currently running (applies when this response
-	 * is the result of a bulkOperationRunQuery call). This uses the contents
-	 * of `$this->userErrors`, so that should be set properly before invoking
-	 * this method.
-	 * If there are multiple errors present in the userErrors, then this will
-	 * always return FALSE.
-	 *
-	 * @return bool TRUE if blocked by another running query, FALSE otherwise
-	 */
-	public function isBlocked() : bool
-	{
-		if (count($this->userErrors) === 1
-			&& stripos($this->userErrors[0]['message'], 'already in progress') !== false
-		) {
-			# Received a user error because a bulk query is already running
-			return true;
+		if (isset($tree['data']['bulkOperationRunQuery']['userErrors'])) {
+			return $tree['data']['bulkOperationRunQuery']['userErrors'];
 		}
 
-		# Received no errors, multiple errors, or a single one for a reason
-		# other than because a bulk query is already running
-		return false;
+		if (isset($tree['errors'])) {
+			return $tree['errors'];
+		}
+
+		return [];
 	}
 
 	/**

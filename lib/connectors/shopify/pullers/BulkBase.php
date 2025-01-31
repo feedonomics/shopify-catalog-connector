@@ -2,19 +2,20 @@
 namespace ShopifyConnector\connectors\shopify\pullers;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
+use ShopifyConnector\connectors\shopify\exceptions\BulkErrorException;
 use ShopifyConnector\connectors\shopify\models\BulkResult;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
 
-use ShopifyConnector\util\File_Utilities;
 
 use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 use ShopifyConnector\exceptions\CustomException;
-
 use ShopifyConnector\exceptions\ApiException;
 
+
 use Exception;
+use ShopifyConnector\util\File_Utilities;
 
 /**
  * Base class for bulk GraphQL queries
@@ -31,6 +32,8 @@ abstract class BulkBase
 	 * @var int Maximum amount of times to retry when a bulk query is blocked.
 	 */
 	const MAX_RETRIES = 256;
+	const MAX_BLOCKED_RETRIES = 30;
+	const MAX_THROTTLED_RETRIES = 30;
 
 	/**
 	 * @var int Maximum amount of attempts when polling before we assume
@@ -218,16 +221,47 @@ abstract class BulkBase
 		$rawres = null;
 		$res = null;
 		$retries = self::MAX_RETRIES;
+		$blocked_retries = self::MAX_BLOCKED_RETRIES;
+		$throttled_retries = self::MAX_THROTTLED_RETRIES;
 
 		do {
-			$rawres = $this->session->client->graphqlRequest($bqry);
-			$res = new BulkResult($rawres);
+			$rawres = $this->session->client->graphql_request($bqry);
 
-			if ($res->isBlocked()) {
-				# In the blocked case, sleep a little extra, then retry
-				sleep(9);
+			try {
+				$res = new BulkResult($rawres);
+			} catch (BulkErrorException $e) {
+				$res = null; // Unset any previous response
 
-			} elseif ($res->isRunning() || $res->isComplete()) {
+				if ($e->query_is_blocked()) {
+					if ($blocked_retries-- <= 0) {
+						# Exceeded allowed retries for blocked case
+						$this->generic_exception(
+							'Another bulk query is already running for this auth token',
+							__FUNCTION__
+						);
+					}
+					# While blocked, sleep a little extra, then retry
+					sleep(self::WAIT_SECONDS + 10);
+					continue;
+				}
+
+				if ($e->query_is_throttled()) {
+					if (--$throttled_retries <= 0) {
+						# Exceeded allowed retries for throttled case
+						$this->generic_exception(
+							'Another bulk query is already running for this auth token',
+							__FUNCTION__
+						);
+					}
+					# While throttled, only wait a little bit before trying again
+					sleep(5);
+					continue;
+				}
+
+				throw $e;
+			}
+
+			if ($res->isRunning() || $res->isComplete()) {
 				# In the running or complete case, move to next steps
 				break; # Break from retry loop
 
@@ -247,13 +281,14 @@ abstract class BulkBase
 				);
 			}
 
+			// Nothing should reach this, but there should be a pause if anything does
 			sleep(self::WAIT_SECONDS);
-		} while (--$retries >= 0);
+		} while (--$retries > 0);
 
-		# Exceeded max retries and still blocked
-		if ($res->isBlocked()) {
+		# Exceeded retries without a usable response
+		if ($res === null) {
 			$this->generic_exception(
-				'Exceeded max retries waiting to run query while blocked',
+				'An unexpected error occurred while trying to submit api query',
 				__FUNCTION__
 			);
 		}
@@ -300,7 +335,16 @@ abstract class BulkBase
 			sleep(5);
 
 			++$pcount;
-			$res = $this->check_status($gid);
+			try {
+				$res = $this->check_status($gid);
+			} catch (BulkErrorException $e) {
+				if ($e->query_is_throttled()) {
+					# When throttled, just try again at the next interval
+					sleep(self::WAIT_SECONDS);
+					continue;
+				}
+				throw $e;
+			}
 
 			if ($res->isComplete()) {
 				# Query has completed, result is ready
@@ -368,7 +412,7 @@ abstract class BulkBase
 	private function check_status(string $gid) : BulkResult
 	{
 		$fields = self::BULK_OP_FIELDS;
-		return new BulkResult($this->session->client->graphqlRequest("{
+		return new BulkResult($this->session->client->graphql_request("{
 			node(id: \"{$gid}\") {
 				... on BulkOperation {
 					{$fields}
@@ -419,7 +463,7 @@ abstract class BulkBase
 			$fields .= "query\n";
 		}
 
-		return new BulkResult($this->session->client->graphqlRequest("
+		return new BulkResult($this->session->client->graphql_request("
 			query {
 				currentBulkOperation {
 					{$fields}

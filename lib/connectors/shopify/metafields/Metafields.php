@@ -143,12 +143,13 @@ class Metafields implements iModule
 			$metafields[] = new Metafield($decoded_data, Metafield::TYPE_PRODUCT);
 		}
 
+		$metafields = array_reverse($metafields);
 		if ($this->session->settings->metafields_split_columns) {
 			foreach ($metafields as $mf) {
 				$product->add_datum($mf->get_identifier(), json_encode($mf));
 			}
 		} else {
-			$product->add_datum(self::PRODUCT_META_KEY, empty($metafields) ? '' : json_encode($metafields));
+			$product->add_datum(self::PRODUCT_META_KEY, empty($metafields) ? '[]' : json_encode($metafields));
 		}
 
 		return $product;
@@ -188,12 +189,13 @@ class Metafields implements iModule
 		foreach ($variant_mfs as $var_id => $metafields) {
 			$variant = new ProductVariant($product, ['id' => $var_id]);
 
+			$metafields = array_reverse($metafields);
 			if ($this->session->settings->metafields_split_columns) {
 				foreach ($metafields as $mf) {
 					$variant->add_datum($mf->get_identifier(), json_encode($mf));
 				}
 			} else {
-				$variant->add_datum(self::VARIANT_META_KEY, empty($metafields) ? '' : json_encode($metafields));
+				$variant->add_datum(self::VARIANT_META_KEY, empty($metafields) ? '[]' : json_encode($metafields));
 			}
 
 			$product->add_variant($variant);
@@ -226,12 +228,13 @@ class Metafields implements iModule
 			$metafields[] = new Metafield($decoded_data, Metafield::TYPE_PRODUCT);
 		}
 
+		$metafields = array_reverse($metafields);
 		if ($this->session->settings->metafields_split_columns) {
 			foreach ($metafields as $mf) {
 				$product->add_datum($mf->get_identifier(), json_encode($mf));
 			}
 		} else {
-			$product->add_datum(self::PRODUCT_META_KEY, empty($metafields) ? '' : json_encode($metafields));
+			$product->add_datum(self::PRODUCT_META_KEY, empty($metafields) ? '[]' : json_encode($metafields));
 		}
 	}
 
@@ -261,12 +264,13 @@ class Metafields implements iModule
 			$metafields[] = new Metafield($decoded_data, Metafield::TYPE_VARIANT);
 		}
 
+		$metafields = array_reverse($metafields);
 		if ($this->session->settings->metafields_split_columns) {
 			foreach ($metafields as $mf) {
 				$variant->add_datum($mf->get_identifier(), json_encode($mf));
 			}
 		} else {
-			$variant->add_datum(self::VARIANT_META_KEY, empty($metafields) ? '' : json_encode($metafields));
+			$variant->add_datum(self::VARIANT_META_KEY, empty($metafields) ? '[]' : json_encode($metafields));
 		}
 	}
 

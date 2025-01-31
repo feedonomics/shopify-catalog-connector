@@ -2,20 +2,18 @@
 
 namespace ShopifyConnector\connectors\shopify\collections;
 
-use ShopifyConnector\connectors\shopify\SessionContainer;
+use Generator;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
-use ShopifyConnector\connectors\shopify\models\Collection;
+use ShopifyConnector\connectors\shopify\models\CollectionPile;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
 use ShopifyConnector\connectors\shopify\pullers\BulkCollections;
+use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
-
 use ShopifyConnector\util\db\MysqliWrapper;
-use ShopifyConnector\util\db\TableHandle;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
-
-use Generator;
+use ShopifyConnector\util\db\TableHandle;
 
 /**
  * The Collections module main class
@@ -134,22 +132,8 @@ class Collections implements iModule
 		}
 
 		$product = new Product(['id' => $row['id']]);
-
-		$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
-
-		foreach ($decoded_data as $collection_field => $collection_data) {
-			if (str_contains($collection_field, 'meta')) {
-				// Force field ordering
-				$data = [
-					'value' => $collection_data['value'] ?? '',
-					'namespace' => $collection_data['namespace'] ?? '',
-					'description' => $collection_data['description'] ?? '',
-				];
-				$product->add_datum($collection_field, json_encode($data));
-			} else {
-				$product->add_datum($collection_field, implode('|', array_keys($collection_data)));
-			}
-		}
+		$collections = new CollectionPile(json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR));
+		$collections->add_collection_data_to_product($product, $this->session->settings->include_collections_meta);
 
 		return $product;
 	}
@@ -173,21 +157,8 @@ class Collections implements iModule
 			return;
 		}
 
-		$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
-
-		foreach ($decoded_data as $collection_field => $collection_data) {
-			if (str_contains($collection_field, 'meta')) {
-				// Force field ordering
-				$data = [
-					'value' => $collection_data['value'] ?? '',
-					'namespace' => $collection_data['namespace'] ?? '',
-					'description' => $collection_data['description'] ?? '',
-				];
-				$product->add_datum($collection_field, json_encode($data));
-			} else {
-				$product->add_datum($collection_field, implode('|', array_keys($collection_data)));
-			}
-		}
+		$collections = new CollectionPile(json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR));
+		$collections->add_collection_data_to_product($product, $this->session->settings->include_collections_meta);
 	}
 
 	/**

@@ -201,7 +201,7 @@ final class ApiClient {
 	 * @return mixed
 	 * @throws ApiException
 	 */
-	public function graphqlRequest(string $query){
+	public function graphql_request(string $query){
 		return $this->request(
 			'POST',
 			sprintf('/admin/api/%s/graphql.json', self::GRAPHQL_VERSION),

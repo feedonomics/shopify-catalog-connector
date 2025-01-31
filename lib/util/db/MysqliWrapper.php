@@ -1,13 +1,11 @@
 <?php
-
 namespace ShopifyConnector\util\db;
 
 use mysqli;
 use mysqli_result;
-
+use mysqli_sql_exception;
 use ShopifyConnector\exceptions\InfrastructureErrorException;
 use ShopifyConnector\log\ErrorLogger;
-
 
 /**
  * Wrapper for extended mysqli functionality
@@ -50,9 +48,9 @@ class MysqliWrapper extends mysqli {
 	private ?string $socket;
 
 	/**
-	 * @var int|null Store for the flags for reconnecting
+	 * @var int Store for the flags for reconnecting
 	 */
-	private ?int $flags;
+	private int $flags = 0;
 
 	/**
 	 * Use `real_connect` for setting credentials and connecting
@@ -71,15 +69,15 @@ class MysqliWrapper extends mysqli {
 		$database = null,
 		$port = null,
 		$socket = null,
-		$flags = null
-	){
+		$flags = 0
+	) : bool {
 		$this->hostname = $hostname;
 		$this->username = $username;
 		$this->password = $password;
 		$this->database = $database;
 		$this->port = $port;
 		$this->socket = $socket;
-		$this->flags = $flags;
+		$this->flags = $flags ?? 0;
 
 		return parent::real_connect($hostname, $username, $password, $database, $port, $socket, $flags);
 	}
@@ -90,7 +88,7 @@ class MysqliWrapper extends mysqli {
 	 * @return bool The result of {@see real_connect}
 	 */
 	public function reconnect() : bool {
-		parent::init();
+		parent::__construct();
 		return parent::real_connect(
 			$this->hostname,
 			$this->username,
@@ -116,14 +114,26 @@ class MysqliWrapper extends mysqli {
 	 * @throws InfrastructureErrorException If there were errors in the query
 	 */
 	public function safe_query(string $query, int $result_mode = MYSQLI_STORE_RESULT){
-		$res = $this->query($query, $result_mode);
-
-		if($this->has_error()){
-			ErrorLogger::log_error("DB Query error. [Message: {$this->get_error()}] [Query: ${query}]");
+		try {
+			$res = $this->query($query, $result_mode);
+		} catch (mysqli_sql_exception $e) {
+			ErrorLogger::log_error("DB Query error. [Message: {$e->getMessage()}] [Query: {$query}]");
 			throw new InfrastructureErrorException();
 		}
 
 		return $res;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function close() : void
+	{
+		try {
+			parent::close();
+		} catch (mysqli_sql_exception $e) {
+			// Do nothing, just don't error out
+		}
 	}
 
 	/**
@@ -190,4 +200,3 @@ class MysqliWrapper extends mysqli {
 	}
 
 }
-

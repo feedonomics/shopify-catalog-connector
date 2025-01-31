@@ -7,7 +7,7 @@ use ShopifyConnector\connectors\shopify\ShopifyUtilities;
 
 use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use ShopifyConnector\util\io\DataUtilities;
-use ShopifyConnector\util\io\InputParser;
+
 
 use JsonException;
 
@@ -99,6 +99,10 @@ final class ProductVariant extends FieldHaver
 	 */
 	public ?Product $product;
 
+	private array $variant_name_cache = [];
+	private array $variant_name_massaged_cache = [];
+
+
 	/**
 	 * Set the raw variant product data and its parent product data
 	 *
@@ -166,7 +170,7 @@ final class ProductVariant extends FieldHaver
 				return strtolower($this->get('inventoryPolicy', ''));
 				
 			case 'inventory_management':
-				return strtolower($this->get('inventoryManagement', '', false));
+				return $this->get_translated_inventory_management();
 
 			case 'fulfillment_service':
 				return $this->get('fulfillmentService', [], false)['handle'] ?? '';
@@ -185,10 +189,11 @@ final class ProductVariant extends FieldHaver
 				return $this->get_sale_price();
 
 			case 'requires_shipping':
-				return $this->get('inventoryItem', []) ? 'true' : 'false';
+				$req_ship = $this->get('inventoryItem', [])['requiresShipping'] ?? false;
+				return $req_ship ? 'true' : 'false';
 				
 			case 'taxable':
-				return $this->get('taxable', false,) ? 'true' : 'false';;
+				return $this->get('taxable', false) ? 'true' : 'false';
 
 			case 'availability':
 				return $this->get_availability();
@@ -214,7 +219,7 @@ final class ProductVariant extends FieldHaver
 				return $this->get_additional_image_links();
 
 			case 'variant_names':
-				return $this->generate_variant_names();
+				return json_encode($this->generate_variant_names(), JSON_FORCE_OBJECT);
 
 			case 'gmc_transition_id':
 				$ccode = SessionContainer::get_active_session()->shop->country_code ?? 'xxx';
@@ -224,6 +229,20 @@ final class ProductVariant extends FieldHaver
 
 			case 'tax_rates':
 				return SessionContainer::get_active_session()->shop->tax_rates_json ?? '';
+
+			// Give metafields priority over any potential "variant_meta" option fields
+			case 'variant_meta':
+				$vm = $this->get('variant_meta');
+				if ($vm !== null) {
+					return $vm;
+				}
+		}
+
+		if (SessionContainer::get_active_setting('variant_names_split_columns')) {
+			$variant_split_name_value = $this->get_split_name_value($field);
+			if ($variant_split_name_value !== null) {
+				return $variant_split_name_value;
+			}
 		}
 
 		return $this->get($field);
@@ -265,8 +284,24 @@ final class ProductVariant extends FieldHaver
 	 */
 	public function get_presentment_prices() : string
 	{
-		$prices = $this->get('presentment_prices', []);
-		return json_encode($prices);
+		$output_prices = [];
+
+		foreach ($this->get('presentment_prices', []) as $price) {
+			$compare_price = empty($price['compareAtPrice']) ? null : [
+				'amount' => number_format($price['compareAtPrice']['amount'],2,'.',''),
+				'currency_code' => $price['compareAtPrice']['currencyCode'],
+			];
+
+			$output_prices[] = [
+				'price' => [
+					'amount' => number_format($price['price']['amount'],2,'.',''),
+					'currency_code' => $price['price']['currencyCode'],
+				],
+				'compare_at_price' => $compare_price,
+			];
+		}
+
+		return json_encode($output_prices);
 	}
 
 	/**
@@ -280,7 +315,7 @@ final class ProductVariant extends FieldHaver
 		$compare_at_price = $this->get('compareAtPrice', '') ?? '';
 		$display_price = $this->get('price', '') ?? '';
 		$cap_override = SessionContainer::get_active_setting('compare_price_override', true);
-		if ($display_price !== '' && $compare_at_price !== ''  && $cap_override) {
+		if ($display_price !== '' && $compare_at_price !== '' && $cap_override) {
 			return $compare_at_price;
 		} else {
 			return $display_price;
@@ -305,8 +340,21 @@ final class ProductVariant extends FieldHaver
 		return '';
 	}
 
+	public function get_translated_inventory_management() : string
+	{
+		$value = strtolower($this->get('inventoryManagement', '', false));
+		if ($value === 'not_managed') {
+			return '';
+		}
+		return $value;
+	}
+
 	/**
 	 * Get this variant's availability.
+	 *
+	 * NOTE: With GQL, Shopify recommends using inventoryItem.tracked to check if
+	 *   inventory level tracking is in effect for an item, rather than making
+	 *   inferences based on inventoryManagement.
 	 *
 	 * @return string The availability string for this variant
 	 * @throws UnexpectedResponseException On invalid data
@@ -317,7 +365,7 @@ final class ProductVariant extends FieldHaver
 			# This field is deprecated
 			$im = strtolower($this->get('inventoryManagement', '', false));
 			$ip = strtolower($this->get('inventoryPolicy', '', false));
-			$iq = $this->get('inventoryQuantity', '', false);
+			$iq = $this->get('inventoryQuantity', 0, false);
 
 			return ($im === 'shopify' && $iq < 1 && $ip === 'deny')
 				? self::STR_NOT_AVAILABLE
@@ -447,11 +495,7 @@ final class ProductVariant extends FieldHaver
 	 */
 	public function get_option_value(string $name) : string
 	{
-		if ($name === strtolower($this->get('selectedOptions')[0]['name'])) {
-			return $this->get('selectedOptions')[0]['value'];
-		} else {
-			return '';
-		}
+		return $this->generate_variant_names_massaged()[strtolower($name)] ?? '';
 	}
 
 	/**
@@ -463,27 +507,26 @@ final class ProductVariant extends FieldHaver
 	public function get_additional_image_links() : string
 	{
 		$images = [];
+
+		$main_image = $this->get('image')['url'] ?? '';
+		if(!empty($main_image)){
+			$images[] = $main_image;
+		}
+
 		foreach ($this->product->get('media', []) ?? [] as $image) {
 			if (empty($image['src'])) {
 				continue;
 			}
-			if (!empty($image['variant_ids'])) {
-				if (in_array($this->get('id'), $image['variant_ids'])) {
-					$images[] = $image['src'];
-				}
-			} else {
-				$color_tag_a = "color-{$this->get_option_value('color')}";
-				$color_tag_b = $this->get_option_value('color');
-				$alt = $image['alt'] ?? '';
 
-				if (stripos($alt, $color_tag_a) !== false
-					|| stripos($alt, $color_tag_b) !== false
-				) {
-					$images[] = $image['src'];
-				}
+			$color_tag = trim(strtolower($this->get_option_value('color')));
+			$alt = strtolower($image['altText'] ?? '');
+
+			if (stripos($alt, $color_tag) !== false) {
+				$images[] = $image['src'];
 			}
 		}
 
+		$images = array_unique($images);
 		return implode(',', $images);
 	}
 
@@ -497,27 +540,43 @@ final class ProductVariant extends FieldHaver
 	 *   - Where/How does this happen?
 	 * - Would it be better to iterate variant's option array instead of parent's options
 	 *
-	 * @return string The variant names
+	 * @return array The variant names
 	 * @throws UnexpectedResponseException On errors encoding the variant names
 	 */
-	public function generate_variant_names() : string
+	private function generate_variant_names() : array
 	{
+		if (empty($this->variant_name_cache)) {
+			foreach ($this->get('selectedOptions', []) as $option) {
+				$name = $option['name'] ?? '';
+				$this->variant_name_cache[$name] = $option['value'] ?? null;
+			}
+		}
+		return $this->variant_name_cache;
+	}
 
-		// example "options":[{"name":"Color","position":1,"values":["Charcoal","Periwinkle"]}]
-		$vnames = [];
-		foreach ($this->product->get('options', []) ?? [] as $opt) {
-			$vnames[$opt['name']] = $opt['values'][0] ?? '';
-			//$vnames[$opt['name']] = $this->get("option{$opt['position']}", '');
+	private function generate_variant_names_massaged() : array
+	{
+		if (empty($this->variant_name_massaged_cache)) {
+			$names = $this->generate_variant_names();
+			//$this->variant_name_massaged_cache = array_change_key_case($names, CASE_LOWER);
+			foreach ($names as $key => $value) {
+				$m_key = strtolower($key);
+				// $m_key = ShopifyUtilities::clean_column_name($key, '_');
+				$this->variant_name_massaged_cache[$m_key] = $value;
+			}
+		}
+		return $this->variant_name_massaged_cache;
+	}
+
+	private function get_split_name_value(string $field) : ?string
+	{
+		$field_parts = explode('_', $field);
+		if ($field_parts[0] !== 'variant' || empty($field_parts[1])) {
+			return null;
 		}
 
-		try {
-			return json_encode($vnames, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR);
-		} catch(JsonException $e){
-			throw new UnexpectedResponseException('shopify', sprintf(
-				'Could not parse variant names. Reason: %s',
-				$e->getMessage()
-			));
-		}
+		$names = $this->generate_variant_names_massaged();
+		return $names[$field_parts[1]] ?? null;
 	}
 
 }

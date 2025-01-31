@@ -62,7 +62,7 @@ final class ProductVariantService
 	) : ProductVariantPileGQL
 	{
 		# TODO: This needs to be revamped to the current way of doing things
-		$res = $session->client->graphqlRequest("query {
+		$res = $session->client->graphql_request("query {
 			productVariants (first: {$first}, after: {$after}) {
 				nodes {
 					id
@@ -126,7 +126,7 @@ final class ProductVariantService
 			$filters = ", {$filters}";
 		}
 
-		$res = $session->client->graphqlRequest("query {
+		$res = $session->client->graphql_request("query {
 			productVariants (first: {$first}{$after}{$filters}) {
 				nodes {
 					id
