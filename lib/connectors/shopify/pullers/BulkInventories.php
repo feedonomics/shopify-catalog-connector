@@ -49,7 +49,7 @@ class BulkInventories extends BulkBase
 			GQL;
 
 		return <<<GQL
-			productVariants (query: "published_status:published") {
+			productVariants{$prod_search_str} {
 				edges {
 					node {
 						id

@@ -155,9 +155,15 @@ class ProductFilterManager extends FilterManager
 
 	protected function get_gql_query_keys() : array
 	{
-		return [
-			self::FILTER_PUBLISHED_STATUS,
-		];
+		$filter_list = [];
+
+		if ($this->get(self::FILTER_PUBLISHED_STATUS) !== 'any') {
+			$filter_list = [
+				self::FILTER_PUBLISHED_STATUS,
+			];
+		}
+
+		return $filter_list;
 	}
 
 	protected function get_gql_search_keys() : array
