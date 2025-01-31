@@ -44,6 +44,7 @@ class BulkCollections extends BulkBase
 			}
 			GQL;
 
+		// Leaving $prod_search_str off of "products" here for partiy (for now)
 		return <<<GQL
 					collections {
 						edges {
