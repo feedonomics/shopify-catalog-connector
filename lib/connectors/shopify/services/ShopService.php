@@ -52,7 +52,7 @@ final class ShopService
 	public static function get_country_info_rest(SessionContainer $session) : array
 	{
 		$cs = new clCountryService($session->client);
-		$list = $cs->getCountries(['fields' => 'code,name,tax,provinces'])->getItems(); # TODO: Forked?
+		$list = $cs->getCountries(['fields' => 'code,name,tax,provinces']);
 		$session->set_last_call_limit();
 
 		# De-Resource the results
