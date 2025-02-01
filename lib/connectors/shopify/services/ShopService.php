@@ -54,9 +54,7 @@ final class ShopService
 		$cs = new clCountryService($session->client);
 		$list = $cs->getCountries(['fields' => 'code,name,tax,provinces']);
 		$session->set_last_call_limit();
-
-		# De-Resource the results
-		return array_map(fn($i) => $i->getItem(), $list);
+		return $list;
 	}
 
 }
