@@ -236,7 +236,7 @@ abstract class BulkBase
 					if ($blocked_retries-- <= 0) {
 						# Exceeded allowed retries for blocked case
 						$this->generic_exception(
-							'Another bulk query is already running for this auth token',
+							'Another bulk query is already running for this auth token. Error message: ' . $e->get_first_message(),
 							__FUNCTION__
 						);
 					}
@@ -249,7 +249,7 @@ abstract class BulkBase
 					if (--$throttled_retries <= 0) {
 						# Exceeded allowed retries for throttled case
 						$this->generic_exception(
-							'Another bulk query is already running for this auth token',
+							'Prevented from running query due to api rate limiting. Error message: ' . $e->get_first_message(),
 							__FUNCTION__
 						);
 					}
@@ -271,18 +271,15 @@ abstract class BulkBase
 					"Error in query:\n" . print_r($rawres, true),
 					__FUNCTION__
 				);
-
-			} else {
-				# In the unknown case, it's different exception time
-				# TODO: Perhaps this should be a retry instead?
-				$this->generic_exception(
-					"Entered unknown state:\n" . print_r($rawres, true),
-					__FUNCTION__
-				);
 			}
 
-			// Nothing should reach this, but there should be a pause if anything does
-			sleep(self::WAIT_SECONDS);
+			# Nothing was handled by the expected cases above, so
+			# In the unknown case, it's different exception time
+			# TODO: Perhaps this should be a retry instead?
+			$this->generic_exception(
+				"Entered unknown state:\n" . print_r($rawres, true),
+				__FUNCTION__
+			);
 		} while (--$retries > 0);
 
 		# Exceeded retries without a usable response

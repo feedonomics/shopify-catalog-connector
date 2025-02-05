@@ -159,6 +159,9 @@ final class ProductVariant extends FieldHaver
 				return (new GID($this->get('product_id', '', false)))->get_id();
 			*/
 
+			case 'created_at':
+				return $this->get('createdAt', '');
+
 			case 'inventory_item_id':
 				$iid = $this->get('inventoryItem', [], false)['id'] ?? null;
 				return $iid !== null ? (new GID($iid))->get_id() : '';

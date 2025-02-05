@@ -12,6 +12,7 @@ use ShopifyConnector\exceptions\api\UnexpectedResponseException;
  * simple and consistent interface for working with the data contained
  * therein.
  */
+
 abstract class FieldHaver
 {
 
@@ -156,7 +157,7 @@ abstract class FieldHaver
 		foreach ($field_list as $field) {
 			$value = $this->get_processed_value($field);
 			if ($value !== null) {
-				$output[$this->translate_field_name($field)] = $value;
+				$output[$field] = $value;
 			}
 		}
 

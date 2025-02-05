@@ -173,6 +173,9 @@ final class Product extends FieldHaver
 			case 'vendor':
 			case 'brand':
 				return $this->get('brand', '');
+
+			case 'parent_created_at':
+				return $this->get('createdAt', '');
 		}
 
 		return $this->get($field);
