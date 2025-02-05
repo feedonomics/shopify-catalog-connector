@@ -18,7 +18,7 @@ use ShopifyConnector\util\db\queries\BatchedDataInserter;
 class BulkMetafields extends BulkBase
 {
 
-	const MAX_METAFIELD_LINE_LENGTH = 250_000;
+	const MAX_METAFIELD_LINE_LENGTH = 5_250_000;
 
 	/**
 	 * @inheritDoc
@@ -82,7 +82,6 @@ class BulkMetafields extends BulkBase
 		BatchedDataInserter $insert_variant
 	) : void
 	{
-
 		$mf_split = $this->session->settings->metafields_split_columns;
 		$mf_names = [];
 		$fh = $this->checked_open_file($filename);
@@ -95,7 +94,7 @@ class BulkMetafields extends BulkBase
 			$decoded = null;
 
 			while (!feof($fh)) {
-				$line = $this->checked_read_line($fh);
+				$line = $this->checked_read_line($fh, self::MAX_METAFIELD_LINE_LENGTH);
 				if ($line === null) {
 					break;
 				}
