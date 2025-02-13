@@ -77,12 +77,14 @@ class ShopifyModular extends BaseConnector {
 			throw new ApiResponseException('Unable to support gmc transition id when country code missing');
 		}
 
+		/*
 		$this->adjust_settings_for_product_count(ProductService::getCountForRangeREST(
 			$this->session,
 			$shop->created_at,
 			$this->session->run_start_time,
 			$this->session->settings->get_product_filter(ProductFilterManager::FILTER_PUBLISHED_STATUS)
 		));
+		*/
 
 
 		###

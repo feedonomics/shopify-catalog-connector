@@ -258,7 +258,7 @@ final class ApiClient {
 		$currentBackOffWindow = $initialSleep;
 
 		for ($attemptNum = 0; $attemptNum < $maxAttempts; $attemptNum++) {
-			$sleepTime = rand($initialSleep, $currentBackOffWindow);
+			$sleep_time = rand($initialSleep, $currentBackOffWindow);
 			$response = $this->client->send($request, $params);
 
 			switch((int) $response->getStatusCode()) {
@@ -270,7 +270,14 @@ final class ApiClient {
 
 				// Rate limiting error, use header for sleepTime
 				case 429: // Too Many Requests
-					$sleepTime = (int) $response->getHeader('Retry-After');
+					$sleep_time = (int) $response->getHeader('Retry-After');
+					break;
+
+				// Retry a few times on server errors with a 2-minute wait time
+				// (2 * 8 = 16-minute grace period)
+				case 502: // Bad Gateway
+				case 503: // Service Unavailable
+					$sleep_time = 120;
 					break;
 
 				// Hard fail errors, skip retrying
@@ -290,7 +297,7 @@ final class ApiClient {
 					break 2;
 			}
 
-			sleep($sleepTime);
+			sleep($sleep_time);
 			$currentBackOffWindow = min($maxBackOffWindow, $currentBackOffWindow * 2);
 		}
 
