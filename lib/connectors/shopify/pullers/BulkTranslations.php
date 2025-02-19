@@ -27,13 +27,14 @@ class BulkTranslations extends BulkBase
 		$product_filters = $this->session->settings->product_filters;
 
 		$prod_search_str = $product_filters->get_filters_gql($prod_query_terms, $prod_search_terms);
+		$locale = $this->session->settings->translation_locale;
 
 		return <<<GQL
 			products{$prod_search_str} {
 				edges {
 					node {
 						id
-						translations(locale: "ES") {
+						translations(locale: "{$locale}") {
 							key
 							locale
 							value

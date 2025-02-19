@@ -91,6 +91,7 @@ class ShopifySettings
 	//public string $strip_characters; // TODO: This doesn't appear to actually be a supported option
 	public string $replace;
 	public string $tax_rates;
+	public string $translation_locale;
 
 	/*
 	 * Array settings fields
@@ -180,6 +181,8 @@ class ShopifySettings
 		$this->force_bulk_pieces = InputParser::extract_boolean($client_options, 'force_bulk_pieces', false);
 
 		$this->debug = InputParser::extract_boolean($client_options, 'debug');
+
+		$this->translation_locale = $client_options['translations_locale'] ?? '';
 
 		$this->delimiter = $client_options['delimiter'] ?? ',';
 		$this->enclosure = $client_options['enclosure'] ?? '"';
