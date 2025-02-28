@@ -2,6 +2,7 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
+use ShopifyConnector\connectors\shopify\services\AccessService;
 use ShopifyConnector\connectors\shopify\ProductFilterManager;
 use ShopifyConnector\connectors\shopify\ShopifyUtilities;
 use ShopifyConnector\connectors\shopify\models\GID;
@@ -85,7 +86,7 @@ class BulkProducts extends BulkBase
 					'status',
 					'bodyHtml',
 				];
-				if (in_array($field,$allowed_fields)) {
+				if (in_array($field, $allowed_fields)) {
 					$allowed_extra_parent_fields .= "{$field}\n";
 				}
 			}
@@ -112,6 +113,26 @@ class BulkProducts extends BulkBase
 												}
 											}
 										}
+			GQL;
+		}
+
+		$publications = '';
+		if (AccessService::get_access_scopes($this->session)->hasScope('read_publications')) {
+			$publications = <<<GQL
+				resourcePublications {
+					edges {
+						node {
+							isPublished
+							publication {
+								catalog {
+									title
+								}
+								id
+								name
+							}
+						}
+					}
+				}
 			GQL;
 		}
 
@@ -163,6 +184,7 @@ class BulkProducts extends BulkBase
 						updatedAt
 						vendor
 
+						{$publications}
 						{$allowed_extra_parent_fields}
 
 						variants {
@@ -195,6 +217,10 @@ class BulkProducts extends BulkBase
 										requiresShipping
 										sku
 										tracked
+										unitCost {
+											amount
+											currencyCode
+										}
 									}
 
 									inventoryManagement
@@ -255,7 +281,9 @@ class BulkProducts extends BulkBase
 				$decoded = json_decode($line, true, 128, JSON_THROW_ON_ERROR);
 
 				if (empty($decoded['id'])) {
-					if (!empty($decoded['__parentId'])) {
+					if (!empty($decoded['publication']['id'])) {
+						$gid = new GID($decoded['publication']['id']);
+					} elseif (!empty($decoded['__parentId'])) {
 						$gid = new GID($decoded['__parentId']);
 						if ($gid->is_variant()) {
 							unset($decoded['__parentId']);
@@ -362,6 +390,17 @@ class BulkProducts extends BulkBase
 						$product_data['media'][] = $media_data;
 					}
 
+				} elseif ($gid->is_publication()) {
+					if ($product_data === null) {
+						// Encountered a publication before a product. This really shouldn't
+						// happen, so would indicate something pretty weird is going on
+						$this->generic_exception(
+							'Unexpected format in bulk products response (m); declining to continue',
+							'processing'
+						);
+					} else {
+						$product_data['publications'][] = $decoded['publication'];
+					}
 				} else {
 					# Not a type we were expecting.
 					# I guess just silently skip...

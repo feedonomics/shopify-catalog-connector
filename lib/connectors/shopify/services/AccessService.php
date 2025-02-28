@@ -35,7 +35,7 @@ final class AccessService
 	 */
 	public static function get_access_scopes_gql(SessionContainer $session) : AccessScopes
 	{
-		return new AccessScopes($session->client->graphql_request('query { app { availableAccessScopes { handle } } }'), []);
+		return new AccessScopes($session->client->graphql_request('query AccessScopeList { currentAppInstallation { accessScopes { handle } } }'), []);
 	}
 
 	/**

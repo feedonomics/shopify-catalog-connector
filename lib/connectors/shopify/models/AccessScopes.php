@@ -34,7 +34,7 @@ final class AccessScopes extends PagedREST
 	public function __construct(array $scopeList, array $pageLinks)
 	{
 		$scopes = [];
-		foreach($scopeList['data']['app']['availableAccessScopes'] as $scope) {
+		foreach ($scopeList['data']['currentAppInstallation']['accessScopes'] as $scope) {
 			$scopes[] = $scope['handle'];
 		}
 		$this->scopes = $scopes;

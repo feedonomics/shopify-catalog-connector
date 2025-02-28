@@ -43,6 +43,7 @@ final class Product extends FieldHaver
 
 		'published_status',
 		'additional_image_link',
+		'publications',
 	];
 
 	/**
@@ -143,6 +144,9 @@ final class Product extends FieldHaver
 			case 'tags':
 				return implode(', ', $this->get('tags', []));
 
+			case 'publications':
+				return $this->get_publications();
+
 			case 'published_status':
 				return $this->get_published_status();
 
@@ -195,6 +199,18 @@ final class Product extends FieldHaver
 			? 'unpublished'
 			: 'published'
 		;
+	}
+
+	/**
+	 * Get publications associated with a product and return them as an array.
+	 *
+	 * @return string The json encoded publications array
+	 * @throws UnexpectedResponseException On invalid data
+	 */
+	public function get_publications() : string
+	{
+		$publications = $this->get('publications');
+		return $publications ? json_encode($publications) : '';
 	}
 
 	/**
