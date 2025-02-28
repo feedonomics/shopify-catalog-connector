@@ -21,6 +21,7 @@ final class GID
 	const TYPE_IMAGE = 5;
 	const TYPE_TRANSLATION = 6;
 	const TYPE_INVENTORY_LEVEL = 7;
+	const TYPE_PUBLICATION = 8;
 
 
 	/**
@@ -57,7 +58,7 @@ final class GID
 	{
 		$pfx = self::GID_PREFIX;
 		if (str_contains($gid, '?')) {
-			$parts = explode('?',$gid);
+			$parts = explode('?', $gid);
 			$gid = $parts[0];
 		}
 		$fmtMatched = preg_match("-^{$pfx}(\w+)/(\d+)$-", $gid, $matches);
@@ -98,6 +99,8 @@ final class GID
 				return self::TYPE_IMAGE;
 			case 'inventorylevel':
 				return self::TYPE_INVENTORY_LEVEL;
+			case 'publication':
+				return self::TYPE_PUBLICATION;
 		}
 
 		return self::TYPE_UNKNOWN;
@@ -198,12 +201,21 @@ final class GID
 	/**
 	 * Check if this GID is an inventory level type
 	 *
-	 * @return bool TRUE if this GID is for a inventory level object
+	 * @return bool TRUE if this GID is for an inventory level object
 	 */
 	public function is_inventory_level() : bool
 	{
 		return $this->type === self::TYPE_INVENTORY_LEVEL;
 	}
 
+	/**
+	 * Check if this GID is a publication type
+	 *
+	 * @return bool TRUE if this GID is for a publication object
+	 */
+	public function is_publication() : bool
+	{
+		return $this->type === self::TYPE_PUBLICATION;
+	}
 }
 
