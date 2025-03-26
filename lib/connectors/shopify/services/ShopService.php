@@ -2,60 +2,41 @@
 
 namespace ShopifyConnector\connectors\shopify\services;
 
+use ShopifyConnector\exceptions\ApiException;
 use ShopifyConnector\api\service\StoreService;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\Shop;
 use ShopifyConnector\api\service\CountryService as clCountryService;
 use ShopifyConnector\api\service\ProductService as clProductService;
 use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+use ShopifyConnector\exceptions\ApiResponseException;
 
 /**
  * Service for making Shopify shop related calls
  */
 final class ShopService
 {
-
 	/**
-	 * Get information about the given shop via the REST API
+	 * Get the shop info from GraphQL
 	 *
 	 * @param SessionContainer $session The session container
 	 * @return Shop Information about the shop
 	 * @throws UnexpectedResponseException On invalid data
 	 */
-	public static function get_shop_info_rest(SessionContainer $session) : Shop
+	public static function get_shop_info_gql(SessionContainer $session) : Shop
 	{
-		$ss = new StoreService($session->client);
-		$info = $ss->getStoreInfo();
-		$session->set_last_call_limit();
-
-		$shop = new Shop($info['shop'] ?? []);
-
-		# This may not be the ideal place for this, but for abstracting
-		# to support GraphQL interop, this seems to make sense here
-		$requested_rates = $session->settings->tax_rates;
-		if (!empty($requested_rates)) {
-			$shop->build_tax_rates(
-				self::get_country_info_rest($session),
-				explode(',', strtoupper($requested_rates))
-			);
+		try {
+			$response = $session->client->graphql_request('query { shop { primaryDomain { host } createdAt billingAddress { countryCodeV2 } } }');
+		} catch (ApiException $e) {
+			ApiResponseException::throw_from_cl_api_exception($e);
 		}
+		$shop['domain'] = $response['data']['shop']['primaryDomain']['host'] ?? '';
+		$shop['created_at'] = $response['data']['shop']['createdAt'] ?? '';
+		$shop['country_code'] = $response['data']['shop']['billingAddress']['countryCodeV2'] ?? '';
+		$shop = new Shop($shop ?? []);
+		$session->set_last_call_limit();
 
 		return $shop;
 	}
-
-	/**
-	 * Get the country info about the Shopify shop via the REST API
-	 *
-	 * @param SessionContainer $session The session container
-	 * @return array The country info de-parsed into a basic array
-	 */
-	public static function get_country_info_rest(SessionContainer $session) : array
-	{
-		$cs = new clCountryService($session->client);
-		$list = $cs->getCountries(['fields' => 'code,name,tax,provinces']);
-		$session->set_last_call_limit();
-		return $list;
-	}
-
 }
 
