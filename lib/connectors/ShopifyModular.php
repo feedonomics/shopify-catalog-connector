@@ -70,7 +70,7 @@ class ShopifyModular extends BaseConnector {
 		###
 
 		# used from shop: country_code, created_at, domain
-		$shop = ShopService::get_shop_info_rest($this->session);
+		$shop = ShopService::get_shop_info_gql($this->session);
 		$this->session->shop = $shop;
 
 		if (empty($shop->country_code) && $this->session->settings->use_gmc_transition_id) {
