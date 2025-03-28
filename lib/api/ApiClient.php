@@ -27,7 +27,7 @@ final class ApiClient {
 	/**
 	 * @var string The Graphql version to be used
 	 */
-	const GRAPHQL_VERSION = '2024-04';
+	const GRAPHQL_VERSION = '2025-01';
 
 	/**
 	 * @var ?string Store for the shop code
@@ -173,11 +173,8 @@ final class ApiClient {
 		if ($method === 'GET') {
 			$params[RequestOptions::QUERY] = $payload;
 		} else {
-			if ($params[RequestOptions::HEADERS]['Content-Type'] == 'application/graphql') {
-				$request = new Request($method, $endpoint, [], $payload['query']);
-			} else {
-				$params[RequestOptions::JSON] = $payload;
-			}
+			// Always use JSON encoding for non-GET requests (including GraphQL)
+			$params[RequestOptions::JSON] = $payload;
 		}
 
 		$response =$this->requestWithExponentialBackoff($request, $params);
@@ -206,7 +203,7 @@ final class ApiClient {
 			'POST',
 			sprintf('/admin/api/%s/graphql.json', self::GRAPHQL_VERSION),
 			['query' => $query],
-			['Content-Type' => 'application/graphql']
+			['Content-Type' => 'application/json']
 		);
 	}
 

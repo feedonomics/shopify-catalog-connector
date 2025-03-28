@@ -56,9 +56,7 @@ final class ProductVariant extends FieldHaver
 		'price',
 		'inventory_item_id',
 		'inventory_quantity',
-		'inventory_management',
 		'inventory_policy',
-		'fulfillment_service',
 		'sku',
 		'link',
 		'sale_price',
@@ -171,12 +169,6 @@ final class ProductVariant extends FieldHaver
 				
 			case 'inventory_policy':
 				return strtolower($this->get('inventoryPolicy', ''));
-				
-			case 'inventory_management':
-				return $this->get_translated_inventory_management();
-
-			case 'fulfillment_service':
-				return $this->get('fulfillmentService', [], false)['handle'] ?? '';
 
 			case 'link':
 				$domain = SessionContainer::get_active_session()->shop->domain ?? '';

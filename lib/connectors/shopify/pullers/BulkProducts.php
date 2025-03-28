@@ -223,10 +223,6 @@ class BulkProducts extends BulkBase
 										}
 									}
 
-									inventoryManagement
-									fulfillmentService {
-			  							handle
-									}
 									inventoryQuantity
 									inventoryPolicy
 
