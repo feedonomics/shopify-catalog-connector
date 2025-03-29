@@ -42,6 +42,13 @@ class BulkInventories extends BulkBase
 										location {
 											id
 											name
+											fulfillmentService {
+												handle
+												inventoryManagement
+												permitsSkuSharing
+												serviceName
+												type
+											}
 										}
 									}
 								}
@@ -58,7 +65,15 @@ class BulkInventories extends BulkBase
 						}
 						inventoryItem {
 							id
+							measurement {
+								weight {
+									unit
+									value
+								}
+							}
+							requiresShipping
 							sku
+							tracked
 							unitCost {
 								amount
 								currencyCode
@@ -110,6 +125,7 @@ class BulkInventories extends BulkBase
 							'sku' => $last_variant_data['inventoryItem']['sku'],
 							'cost' => $last_variant_data['inventoryItem']['unitCost']['amount'] ?? null,
 							'currency' => $last_variant_data['inventoryItem']['unitCost']['currencyCode'] ?? null,
+							'tracked' => $last_variant_data['inventoryItem']['tracked'],
 						];
 
 						$last_variant_id = new GID($last_variant_data['id']);
@@ -146,6 +162,7 @@ class BulkInventories extends BulkBase
 						'location_id' => $loc_id,
 						'available' => $quantity,
 						'location_name' => $decoded['location']['name'] ?? '',
+						'fulfillment_service' => $decoded['location']['fulfillmentService'] ?? '',
 					];
 
 				} else {
@@ -161,6 +178,7 @@ class BulkInventories extends BulkBase
 					'sku' => $last_variant_data['inventoryItem']['sku'],
 					'cost' => $last_variant_data['inventoryItem']['unitCost']['amount'] ?? null,
 					'currency' => $last_variant_data['inventoryItem']['unitCost']['currencyCode'] ?? null,
+					'tracked' => $last_variant_data['inventoryItem']['tracked'],
 				];
 
 				$last_variant_id = new GID($last_variant_data['id']);

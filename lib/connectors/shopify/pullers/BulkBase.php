@@ -365,9 +365,9 @@ abstract class BulkBase
 					$this->generic_exception(
 						'Exceeded ' . self::MAX_POLL_ERRORS
 						. ' errors when polling for query completion.'
-						. " Status: {$res->status}. Error code: {$res->errorCode}."
+						. " Status: {$res->status}. Error code: {$res->errorCode}. "
 						. 'Last error messages: '
-						. print_r($res->userErrors, true),
+						. json_encode($res->userErrors, JSON_PRETTY_PRINT),
 						__FUNCTION__
 					);
 				}

@@ -127,6 +127,10 @@ class ShopifyModular extends BaseConnector {
 		$tokenScopes = AccessService::get_access_scopes($this->session);
 		$missingScopes = [];
 
+		if ($this->session->settings->include_inventory_level && !$tokenScopes->hasScope('read_locations')) {
+			$missingScopes[] = 'read_locations';
+		}
+
 		foreach($this->session->settings->get('data_types', []) as $item){
 			$neededScope = self::REQUEST_TO_SCOPE_MAP[$item] ?? null;
 			if($neededScope === null){
@@ -139,7 +143,7 @@ class ShopifyModular extends BaseConnector {
 		}
 
 		if(!empty($missingScopes)){
-			throw new MissingPermissionsException(implode(', ', $missingScopes));
+			throw new MissingPermissionsException(implode(', ', array_unique($missingScopes)));
 		}
 	}
 

@@ -60,6 +60,8 @@ class Inventories implements iModule
 
 		if ($this->session->settings->include_inventory_level) {
 			$output_fields = array_merge($output_fields, [
+				'fulfillment_service',
+				'inventory_management',
 				'inventory_level',
 			]);
 		}
