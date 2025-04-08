@@ -349,47 +349,24 @@ final class ProductVariant extends FieldHaver
 	/**
 	 * Get this variant's availability.
 	 *
-	 * NOTE: With GQL, Shopify recommends using inventoryItem.tracked to check if
-	 *   inventory level tracking is in effect for an item, rather than making
-	 *   inferences based on inventoryManagement.
-	 *
 	 * @return string The availability string for this variant
 	 * @throws UnexpectedResponseException On invalid data
 	 */
 	public function get_availability() : string
 	{
-		if ($this->get('availableForSale') !== null) {
-			# This field is deprecated
-			$im = strtolower($this->get('inventoryManagement', '', false));
-			$ip = strtolower($this->get('inventoryPolicy', '', false));
-			$iq = $this->get('inventoryQuantity', 0, false);
+		$inv_item = $this->get('inventoryItem', []);
+		$tracked_node = $inv_item['tracked'];
 
-			return ($im === 'shopify' && $iq < 1 && $ip === 'deny')
-				? self::STR_NOT_AVAILABLE
-				: self::STR_AVAILABLE;
+		$ip = strtolower($this->get('inventoryPolicy', '', false));
+		$iq = $this->get('inventoryQuantity', 0, false);
 
-		} else {
-			# The old REST API way:
-
-			$inv_qty = $this->get('inventory_quantity', null);
-			if (!is_numeric($inv_qty)) {
-				return self::STR_AVAILABLE;
-			}
-			$inv_qty = (int)$inv_qty;
-
-			$inv_mgmt = $this->get('inventory_management', '');
-			$inv_policy = $this->get('inventory_policy', '');
-
-			if (
-				$inv_qty < 1
-				&& strtolower($inv_mgmt) === 'shopify'
-				&& strtolower($inv_policy) === 'deny'
-			) {
-				return self::STR_NOT_AVAILABLE;
-			}
-
-			return self::STR_AVAILABLE;
-		}
+		return (
+			($tracked_node && $iq < 1 && $ip === 'deny')
+			||
+			$this->get('availableForSale') === false
+		)
+			? self::STR_NOT_AVAILABLE
+			: self::STR_AVAILABLE;
 	}
 
 	/**
