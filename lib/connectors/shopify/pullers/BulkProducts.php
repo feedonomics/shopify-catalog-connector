@@ -67,7 +67,6 @@ class BulkProducts extends BulkBase
 			'product', # product_id
 			'sku',
 			'taxable',
-			'taxCode', # tax_code
 			'title',
 			'updatedAt', # updated_at
 			'weight', # (weight_unit now a part of this field)
@@ -246,6 +245,11 @@ class BulkProducts extends BulkBase
 				}
 			}
 			GQL;
+
+		//variant.taxCode is deprecated as of version 2025-10
+		//https://shopify.dev/changelog/deprecation-of-tax-code-field
+		//https://shopify.dev/docs/api/admin-graphql/latest/objects/ProductVariant#field-ProductVariant.fields.taxCode
+		
 	}
 
 	/**

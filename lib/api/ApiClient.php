@@ -27,7 +27,7 @@ final class ApiClient {
 	/**
 	 * @var string The Graphql version to be used
 	 */
-	const GRAPHQL_VERSION = '2025-01';
+	const GRAPHQL_VERSION = '2025-10';
 
 	/**
 	 * @var ?string Store for the shop code
