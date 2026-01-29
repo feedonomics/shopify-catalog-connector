@@ -3,18 +3,20 @@
 namespace ShopifyConnector\connectors\shopify;
 
 use ShopifyConnector\connectors\shopify\ShopifySettings;
+use ShopifyConnector\connectors\shopify\models\AccessScopes;
 use ShopifyConnector\connectors\shopify\models\Shop;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
+use ShopifyConnector\connectors\shopify\services\AccessService;
+use ShopifyConnector\connectors\shopify\services\ShopService;
 
-use ShopifyConnector\util\db\TableHandle;
-use ShopifyConnector\exceptions\InfrastructureErrorException;
+use ShopifyConnector\exceptions\ApiException;
+use ShopifyConnector\exceptions\ApiResponseException;
 
 use ShopifyConnector\api\ApiClient;
-
-use Exception;
+use ShopifyConnector\log\ErrorLogger;
 
 /**
- * Container class for the various dependencies, helpers, etc that are used in
+ * Container class for the various dependencies, helpers, etc. that are used in
  * the course of a Shopify import to make it all easy to pass around.
  *
  * <p>Additionally, when mocks are needed in testing, they will be injected
@@ -22,7 +24,6 @@ use Exception;
  */
 final class SessionContainer
 {
-
 	/**
 	 * @var int Flags for the run stage to indicate what phase the run is currently in.
 	 */
@@ -30,21 +31,13 @@ final class SessionContainer
 	const STAGE_PULLING = 1;
 	const STAGE_FINAL_OUTPUT = 2;
 
-
+	/**
+	 * @var SessionContainer|null The active session instance
+	 */
 	private static ?self $active_session = null;
 
 	/**
-	 * @var ShopifySettings Store for the Shopify import settings
-	 */
-	public ShopifySettings $settings;
-
-	/**
-	 * @var ApiClient Store for the CL client
-	 */
-	public ApiClient $client;
-
-	/**
-	 * @var Shop The data for the shop being pulled from
+	 * @var Shop|null The data for the shop being pulled from
 	 */
 	public ?Shop $shop = null;
 
@@ -58,50 +51,53 @@ final class SessionContainer
 	public array $pull_stats = [];
 
 	/**
-	 * @var string Flag for the import start time
-	 * @readonly
+	 * @var string|null Store for the current bulk ID
 	 */
-	public string $run_start_time;
-
-	/**
-	 * @var string Store for the current API call limit
-	 */
-	public string $last_call_limit = '1/40';
+	private ?string $current_bulk_id = null;
 
 	/**
 	 * @var int Flag for what stage the run is in
 	 */
 	private int $run_stage = self::STAGE_SETUP;
 
+	/**
+	 * @var AccessScopes The access scopes available to the app/token
+	 */
+	private AccessScopes $access_scopes;
 
 	/**
 	 * Container class for the various dependencies, helpers, etc that are used
 	 * in the course of a Shopify import to make it all easy to pass around.
 	 *
 	 * @param ShopifySettings $settings The Shopify import settings
-	 * @param ApiClient $client The CL client
+	 * @param ApiClient $client The API client
 	 */
 	public function __construct(
-		ShopifySettings $settings,
-		ApiClient $client
+		public readonly ShopifySettings $settings,
+		public readonly ApiClient   $client
 	)
 	{
-		$this->settings = $settings;
-		$this->client = $client;
-
-		$this->run_start_time = date(DATE_ATOM);
 	}
 
 	/**
-	 * Update the last call limit information based on the most recent
-	 * response in this session's client.
-	 *
-	 * @return void This extracts the call limit from the internal client
-	 * and stores it in {@see last_call_limit}
+	 * Initializes a session
+	 * @throws ApiResponseException
 	 */
-	public function set_last_call_limit() : void
+	public function initialize() : void
 	{
-		$this->last_call_limit = $this->client->getHeader('X-Shopify-Shop-Api-Call-Limit') ?? $this->last_call_limit;
+		$this->set_as_active();
+		$this->shop = ShopService::get_shop_info_gql($this);
+		register_shutdown_function($this->cleanup_bulk_operation(...));
+	}
+
+	/**
+	 * Set the current bulk operation id. The value supplied should be a Shopify GID string
+	 *
+	 * @param ?string $gid The current gid for running bulk operation
+	 */
+	public function set_current_bulk_id(?string $gid) : void
+	{
+		$this->current_bulk_id = $gid;
 	}
 
 	/**
@@ -162,5 +158,38 @@ final class SessionContainer
 		return $session->settings->get($key, $default);
 	}
 
-}
+	/**
+	 * @throws ApiException
+	 */
+	public function get_access_scopes() : AccessScopes
+	{
+		$this->access_scopes ??= AccessService::get_access_scopes($this);
+		return $this->access_scopes;
+	}
 
+	/**
+	 * This is to clear bulk queries so processes can be retried
+	 * Canceling has no effect on completed or failed queries
+	 *
+	 * @throws ApiException
+	 */
+	private function cleanup_bulk_operation() : void
+	{
+		if ($this->current_bulk_id !== null) {
+			try {
+				$this->client->graphql_request(<<<GRAPHQL
+					mutation {
+						bulkOperationCancel(id: "{$this->current_bulk_id}") {
+							bulkOperation {
+								status
+							}
+						}
+					}
+					GRAPHQL
+				);
+			} catch (\Exception $e) {
+				ErrorLogger::log_error('Bulk operation cleanup failed: ' . $e->getMessage());
+			}
+		}
+	}
+}

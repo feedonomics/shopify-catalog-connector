@@ -2,7 +2,7 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
-use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+use ShopifyConnector\exceptions\ApiResponseException;
 
 /**
  * Model for information about a Shopify shop
@@ -32,6 +32,11 @@ class Shop
 	public string $tax_rates_json = '[]';
 
 	/**
+	 * @var int Store for the total number of products in the shop's catalog
+	 */
+	public int $product_catalog_size;
+
+	/**
 	 * Model for information about a Shopify shop
 	 *
 	 * @param array $data Information about the Shopify shop to parse out.
@@ -41,12 +46,12 @@ class Shop
 	 *   <li>`country_code` (required)</li>
 	 *   <li>`created_at` (optional)</li>
 	 * </ul>
-	 * @throws UnexpectedResponseException On missing required keys from `$data`
+	 * @throws ApiResponseException On missing required keys from `$data`
 	 */
 	public function __construct(array $data)
 	{
 		if (!isset($data['domain'], $data['country_code'])) {
-			throw new UnexpectedResponseException('Shopify', 'Shop data missing required fields');
+			throw new ApiResponseException('Shop data missing required fields');
 		}
 
 		$this->domain = $data['domain'];
@@ -95,4 +100,3 @@ class Shop
 	}
 
 }
-

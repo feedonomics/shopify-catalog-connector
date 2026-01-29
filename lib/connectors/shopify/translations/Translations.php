@@ -4,12 +4,13 @@ namespace ShopifyConnector\connectors\shopify\translations;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
-use ShopifyConnector\connectors\shopify\models\Translation;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
 use ShopifyConnector\connectors\shopify\pullers\BulkTranslations;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
+
+use ShopifyConnector\exceptions\InfrastructureErrorException;
 
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\TableHandle;
@@ -22,18 +23,11 @@ use Generator;
  */
 class Translations implements iModule
 {
-
 	use StandardModule;
-
-
-	const PRODUCT_META_KEY = 'product_meta';
-	const VARIANT_META_KEY = 'variant_meta';
-
 
 	private SessionContainer $session;
 
 	private ?TableHandle $table_product = null;
-	private ?TableHandle $table_variant = null;
 
 	private array $translation_names = [];
 
@@ -60,13 +54,11 @@ class Translations implements iModule
 	{
 		$prefix = $this->session->settings->get_table_prefix();
 		$this->table_product = $this->generate_product_table($cxn, "{$prefix}_translations_prod");
-		$this->table_variant = $this->generate_variant_table($cxn, "{$prefix}_translations_vars");
 
 		$insert_product = new BatchedDataInserter($cxn, $this->get_product_inserter($cxn, $this->table_product));
-		$insert_variant = new BatchedDataInserter($cxn, $this->get_variant_inserter($cxn, $this->table_variant));
 
 		$puller = new BulkTranslations($this->session);
-		$processing_result = $puller->do_bulk_pull($cxn, $insert_product, $insert_variant);
+		$processing_result = $puller->do_bulk_pull($cxn, $insert_product, null);
 		$this->translation_names = $processing_result->result;
 	}
 
@@ -76,7 +68,7 @@ class Translations implements iModule
 	public function get_products(MysqliWrapper $cxn) : Generator
 	{
 		if ($this->table_product === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$last_retrieved_pid = 0;
@@ -105,6 +97,8 @@ class Translations implements iModule
 	 * @param MysqliWrapper $cxn The database connection to query on
 	 * @param int $last_retrieved_pid The product id to start from when finding this one
 	 * @return ?Product A Product representation of the retrieved data or NULL if no more
+	 * @throws InfrastructureErrorException
+	 * @throws \JsonException
 	 */
 	private function get_next_product(MysqliWrapper $cxn, int $last_retrieved_pid) : ?Product
 	{
@@ -112,7 +106,7 @@ class Translations implements iModule
 
 		$row = $result->fetch_assoc();
 		if ($row === false) {
-			throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving product data'));
 		}
 
 		if ($row === null) {
@@ -125,7 +119,7 @@ class Translations implements iModule
 
 		for ( ; $row !== null; $row = $result->fetch_assoc()) {
 			if ($row === false) {
-				throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving product data'));
 			}
 
 			if (empty($row['data'])) {
@@ -153,7 +147,7 @@ class Translations implements iModule
 	public function add_data_to_product(MysqliWrapper $cxn, Product $product) : void
 	{
 		if ($this->table_product === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_product, $product->id);
@@ -161,7 +155,7 @@ class Translations implements iModule
 
 		foreach ($result as $row) {
 			if ($row === false) {
-				throw new \Exception('Error while retrieving data for individual product: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual product'));
 			}
 
 			if (empty($row['data'])) {
@@ -188,4 +182,3 @@ class Translations implements iModule
 		// No variants in translations
 	}
 }
-

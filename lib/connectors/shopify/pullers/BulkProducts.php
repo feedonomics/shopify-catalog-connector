@@ -2,12 +2,14 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
-use ShopifyConnector\connectors\shopify\services\AccessService;
-use ShopifyConnector\connectors\shopify\ProductFilterManager;
-use ShopifyConnector\connectors\shopify\ShopifyUtilities;
+use ShopifyConnector\connectors\shopify\models\Field;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\products\Products;
+use ShopifyConnector\connectors\shopify\products\ProductFilterManager;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
+
+use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\InfrastructureErrorException;
 
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
@@ -21,10 +23,9 @@ class BulkProducts extends BulkBase
 	/**
 	 * @inheritDoc
 	 */
-	public function get_query(array $prod_query_terms = [], array $prod_search_terms = []) : string
+	public function get_query() : string
 	{
-		$product_filters = $this->session->settings->product_filters;
-		$prod_search_str = $product_filters->get_filters_gql($prod_query_terms, $prod_search_terms);
+		$prod_search_str = $this->session->settings->product_filters->get_filters_gql();
 
 		# TODO: Handle limited/extra fields
 
@@ -92,48 +93,89 @@ class BulkProducts extends BulkBase
 			$allowed_extra_parent_fields = trim($allowed_extra_parent_fields);
 		}
 		$media_filter = '(query: "media_type:IMAGE")';
+
+		$fragments = [];
+		if (!empty($this->session->settings->contextual_pricing_countries)) {
+			foreach ($this->session->settings->get_contextual_pricing_country_aliases() as $value => $alias) {
+				$fragments[] = <<<GQL
+					{$alias}: contextualPricing(context: { country: {$value} }) {
+						price {
+							amount
+							currencyCode
+						}
+						compareAtPrice {
+							amount
+							currencyCode
+						}
+					}
+				GQL;
+			}
+		}
+
+		if (!empty($this->session->settings->contextual_pricing_locations)) {
+			foreach ($this->session->settings->get_contextual_pricing_location_aliases() as $value => $alias) {
+				$fragments[] = <<<GQL
+					{$alias}: contextualPricing(context: { locationId: "{$value}" }) {
+						price {
+							amount
+							currencyCode
+						}
+						compareAtPrice {
+							amount
+							currencyCode
+						}
+					}
+				GQL;
+			}
+		}
+
+		$contextual_pricing = implode("\n", $fragments);
+
 		$presentment_prices = '';
 		if ($this->session->settings->include_presentment_prices) {
 			$currency_filters = $this->session->settings->product_filters->get(ProductFilterManager::FILTER_PRESENTMENT_CURRENCIES);
 			$currency_filter_str = empty($currency_filters) ? '' : "(presentmentCurrencies: [{$currency_filters}])";
 			$presentment_prices = <<<GQL
-										presentmentPrices {$currency_filter_str} {
-
-											edges {
-												node {
-													price {
-														currencyCode
-														amount
-													}
-													compareAtPrice {
-														currencyCode
-														amount
-													}
-												}
-											}
-										}
-			GQL;
-		}
-
-		$publications = '';
-		if (AccessService::get_access_scopes($this->session)->hasScope('read_publications')) {
-			$publications = <<<GQL
-				resourcePublications {
+				presentmentPrices {$currency_filter_str} {
 					edges {
 						node {
-							isPublished
-							publication {
-								catalog {
-									title
-								}
-								id
-								name
+							price {
+								currencyCode
+								amount
+							}
+							compareAtPrice {
+								currencyCode
+								amount
 							}
 						}
 					}
 				}
 			GQL;
 		}
+
+		$publications = '';
+		if ($this->session->get_access_scopes()->has_scope('read_publications')) {
+			$publications = <<<GQL
+				resourcePublications {
+					edges {
+						node {
+							isPublished
+							publication {
+								id
+								name
+								catalog {
+									title
+								}
+							}
+						}
+					}
+				}
+			GQL;
+		}
+
+		//variant.taxCode is deprecated as of version 2025-10
+		//https://shopify.dev/changelog/deprecation-of-tax-code-field
+		//https://shopify.dev/docs/api/admin-graphql/latest/objects/ProductVariant#field-ProductVariant.fields.taxCode
 
 		return <<<GQL
 			products{$prod_search_str} {
@@ -147,7 +189,7 @@ class BulkProducts extends BulkBase
 						descriptionHtml
 						handle
 
-						media{$media_filter} {
+						media(query: "media_type:IMAGE") {
 							edges {
 								node {
 									id
@@ -191,6 +233,7 @@ class BulkProducts extends BulkBase
 								node {
 									id
 									legacyResourceId
+									{$contextual_pricing}
 									{$presentment_prices}
 									availableForSale
 									barcode
@@ -245,25 +288,20 @@ class BulkProducts extends BulkBase
 				}
 			}
 			GQL;
-
-		//variant.taxCode is deprecated as of version 2025-10
-		//https://shopify.dev/changelog/deprecation-of-tax-code-field
-		//https://shopify.dev/docs/api/admin-graphql/latest/objects/ProductVariant#field-ProductVariant.fields.taxCode
-		
 	}
 
 	/**
 	 * @inheritDoc
+	 * @throws ApiResponseException
+	 * @throws InfrastructureErrorException
 	 */
 	public function process_bulk_file(
 		string $filename,
 		BulkProcessingResult $result,
 		MysqliWrapper $cxn,
-		BatchedDataInserter $insert_product,
-		BatchedDataInserter $insert_variant
-	) : void
-	{
-
+		?BatchedDataInserter $insert_product,
+		?BatchedDataInserter $insert_variant
+	) : void {
 		$pull_stats = $this->session->pull_stats[Products::MODULE_NAME];
 		$fh = $this->checked_open_file($filename);
 
@@ -291,11 +329,11 @@ class BulkProducts extends BulkBase
 						}
 						continue;
 					} else {
-						$this->generic_exception(
-							'Unexpected format in bulk products response (gid); declining to continue',
-							'processing'
+						throw new InfrastructureErrorException(
+							$this->get_error_message(
+								'Unexpected format in bulk products response (gid); declining to continue',
+							)
 						);
-						// TODO: Error? Log something? Different behavior?
 						//++$pull_stats->general_errors;
 						//continue;
 					}
@@ -327,14 +365,14 @@ class BulkProducts extends BulkBase
 					$product_data = $decoded;
 					$product_data['id'] = $gid->get_id();
 					$product_data['media'] = [];
-
 				} elseif ($gid->is_variant()) {
 					if ($product_data === null) {
 						// Encountered a variant before a product. This really shouldn't
 						// happen, so would indicate something pretty weird is going on
-						$this->generic_exception(
-							'Unexpected format in bulk products response (v); declining to continue',
-							'processing'
+						throw new InfrastructureErrorException(
+							$this->get_error_message(
+								'Unexpected format in bulk products response (v); declining to continue',
+							)
 						);
 					}
 
@@ -359,14 +397,14 @@ class BulkProducts extends BulkBase
 							$variant_names[$identifier] = true;
 						}
 					}
-
 				} elseif ($gid->is_media()) {
 					if ($product_data === null) {
 						// Encountered a media before a product. This really shouldn't
 						// happen, so would indicate something pretty weird is going on
-						$this->generic_exception(
-							'Unexpected format in bulk products response (m); declining to continue',
-							'processing'
+						throw new InfrastructureErrorException(
+							$this->get_error_message(
+								'Unexpected format in bulk products response (m); declining to continue',
+							)
 						);
 					}
 
@@ -389,17 +427,17 @@ class BulkProducts extends BulkBase
 					} else {
 						$product_data['media'][] = $media_data;
 					}
-
 				} elseif ($gid->is_publication()) {
 					if ($product_data === null) {
 						// Encountered a publication before a product. This really shouldn't
 						// happen, so would indicate something pretty weird is going on
-						$this->generic_exception(
-							'Unexpected format in bulk products response (m); declining to continue',
-							'processing'
+						throw new InfrastructureErrorException(
+							$this->get_error_message(
+								'Unexpected format in bulk products response (m); declining to continue',
+							)
 						);
 					} else {
-						$product_data['publications'][] = $decoded['publication'];
+						$product_data[Field::PUBLICATIONS->value][] = $decoded['publication'];
 					}
 				} else {
 					# Not a type we were expecting.
@@ -428,7 +466,6 @@ class BulkProducts extends BulkBase
 			// Commit anything remaining in the batched inserters
 			$insert_product->run_query($cxn);
 			$insert_variant->run_query($cxn);
-
 		} finally {
 			fclose($fh);
 		}
@@ -438,6 +475,4 @@ class BulkProducts extends BulkBase
 			array_keys($variant_names),
 		)));
 	}
-
 }
-

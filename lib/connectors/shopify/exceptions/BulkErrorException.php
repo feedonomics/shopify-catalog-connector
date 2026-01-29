@@ -2,11 +2,10 @@
 
 namespace ShopifyConnector\connectors\shopify\exceptions;
 
-use ShopifyConnector\connectors\shopify\models\BulkResult;
-use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+use ShopifyConnector\exceptions\ApiResponseException;
 
 
-class BulkErrorException extends UnexpectedResponseException
+class BulkErrorException extends ApiResponseException
 {
 
 	private array $errors;
@@ -15,7 +14,7 @@ class BulkErrorException extends UnexpectedResponseException
 	public function __construct(array $errors, string $msg = '')
 	{
 		$this->errors = $errors;
-		parent::__construct('Shopify', $msg);
+		parent::__construct($msg);
 	}
 
 	public function get_first_message() : string
@@ -58,6 +57,4 @@ class BulkErrorException extends UnexpectedResponseException
 		# other than being throttled
 		return false;
 	}
-
 }
-

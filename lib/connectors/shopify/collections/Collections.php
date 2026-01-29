@@ -15,6 +15,8 @@ use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 use ShopifyConnector\util\db\TableHandle;
 
+use ShopifyConnector\exceptions\InfrastructureErrorException;
+
 /**
  * The Collections module main class
  */
@@ -87,7 +89,7 @@ class Collections implements iModule
 	public function get_products(MysqliWrapper $cxn) : Generator
 	{
 		if ($this->table_product === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$last_retrieved_pid = 0;
@@ -116,6 +118,8 @@ class Collections implements iModule
 	 * @param MysqliWrapper $cxn The database connection to query on
 	 * @param int $last_retrieved_pid The product id to start from when finding this one
 	 * @return ?Product A Product representation of the retrieved data or NULL if no more
+	 * @throws InfrastructureErrorException
+	 * @throws \JsonException
 	 */
 	private function get_next_product(MysqliWrapper $cxn, int $last_retrieved_pid) : ?Product
 	{
@@ -123,7 +127,7 @@ class Collections implements iModule
 
 		$row = $result->fetch_assoc();
 		if ($row === false) {
-			throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving product data'));
 		}
 
 		if ($row === null) {
@@ -144,13 +148,13 @@ class Collections implements iModule
 	public function add_data_to_product(MysqliWrapper $cxn, Product $product) : void
 	{
 		if ($this->table_product === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_product, $product->id);
 		$row = $result->fetch_assoc();
 		if ($row === false) {
-			throw new \Exception('Error while retrieving data for individual product: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual product'));
 		}
 
 		if (empty($row['data'])) {
@@ -170,4 +174,3 @@ class Collections implements iModule
 	}
 
 }
-

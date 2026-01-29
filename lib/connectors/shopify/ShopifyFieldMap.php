@@ -87,6 +87,7 @@ class ShopifyFieldMap
 		## VARIANT FIELDS
 		'barcode' => self::TYPE_VARCHAR,
 		'compare_at_price' => self::TYPE_VARCHAR,
+		'contextual_pricing' => self::TYPE_JSONSTR,
 		'created_at' => self::TYPE_VARCHAR,
 		'fulfillment_service' => self::TYPE_VARCHAR,
 		'grams' => self::TYPE_VARCHAR,
@@ -130,4 +131,3 @@ class ShopifyFieldMap
 	}
 
 }
-

@@ -89,7 +89,7 @@ class TableBuilder {
 	 */
 	public function add_col_char(string $name, int $size) : TableBuilder {
 		$s_name = $this->cxn->strip_enclosure_characters($name);
-		$this->columns[] = "`${s_name}` CHAR(${size})";
+		$this->columns[] = "`{$s_name}` CHAR({$size})";
 		return $this;
 	}
 
@@ -102,7 +102,7 @@ class TableBuilder {
 	 */
 	public function add_col_varchar(string $name, int $size = 255) : TableBuilder {
 		$s_name = $this->cxn->strip_enclosure_characters($name);
-		$this->columns[] = "`${s_name}` VARCHAR(${size})";
+		$this->columns[] = "`{$s_name}` VARCHAR({$size})";
 		return $this;
 	}
 
@@ -114,7 +114,7 @@ class TableBuilder {
 	 */
 	public function add_col_text(string $name) : TableBuilder {
 		$s_name = $this->cxn->strip_enclosure_characters($name);
-		$this->columns[] = "`${s_name}` TEXT";
+		$this->columns[] = "`{$s_name}` TEXT";
 		return $this;
 	}
 
@@ -126,7 +126,7 @@ class TableBuilder {
 	 */
 	public function add_col_mediumtext(string $name) : TableBuilder {
 		$s_name = $this->cxn->strip_enclosure_characters($name);
-		$this->columns[] = "`${s_name}` MEDIUMTEXT";
+		$this->columns[] = "`{$s_name}` MEDIUMTEXT";
 		return $this;
 	}
 
@@ -139,7 +139,7 @@ class TableBuilder {
 	 */
 	public function add_col_int(string $name, bool $unsigned = true) : TableBuilder {
 		$s_name = $this->cxn->strip_enclosure_characters($name);
-		$this->columns[] = $unsigned ? "`${s_name}` INT UNSIGNED" : "`${s_name}` INT";
+		$this->columns[] = $unsigned ? "`{$s_name}` INT UNSIGNED" : "`{$s_name}` INT";
 		return $this;
 	}
 
@@ -166,7 +166,7 @@ class TableBuilder {
 	 */
 	public function add_col_tinyint(string $name, bool $unsigned = true) : TableBuilder {
 		$s_name = $this->cxn->strip_enclosure_characters($name);
-		$this->columns[] = $unsigned ? "`${s_name}` TINYINT UNSIGNED" : "`${s_name}` TINYINT";
+		$this->columns[] = $unsigned ? "`{$s_name}` TINYINT UNSIGNED" : "`{$s_name}` TINYINT";
 		return $this;
 	}
 
@@ -279,7 +279,7 @@ class TableBuilder {
 
 		if(!$this->cxn->query($qry)){
 			$err = $this->cxn->get_error();
-			ErrorLogger::log_error("Failed to build table. Reason: {$err}. Create statement: ${qry}");
+			ErrorLogger::log_error("Failed to build table. Reason: {$err}. Create statement: {$qry}");
 			throw new InfrastructureErrorException();
 		}
 

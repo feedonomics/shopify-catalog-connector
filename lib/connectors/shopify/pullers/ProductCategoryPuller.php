@@ -14,6 +14,7 @@ use ShopifyConnector\exceptions\InfrastructureErrorException;
 use JsonException;
 
 /**
+ * @deprecated
  * Puller responsible for retrieving Shopify categories
  */
 final class ProductCategoryPuller extends ShopifyPuller

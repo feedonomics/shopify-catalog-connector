@@ -2,7 +2,6 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
-use ShopifyConnector\connectors\shopify\ProductFilterManager;
 use ShopifyConnector\connectors\shopify\translations\Translations;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\models\Translation;
@@ -16,17 +15,12 @@ use ShopifyConnector\util\db\queries\BatchedDataInserter;
  */
 class BulkTranslations extends BulkBase
 {
-
-	const MAX_TRANSLATION_LINE_LENGTH = 250_000;
-
 	/**
 	 * @inheritDoc
 	 */
-	public function get_query(array $prod_query_terms = [], array $prod_search_terms = []) : string
+	public function get_query() : string
 	{
-		$product_filters = $this->session->settings->product_filters;
-
-		$prod_search_str = $product_filters->get_filters_gql($prod_query_terms, $prod_search_terms);
+		$prod_search_str = $this->session->settings->product_filters->get_filters_gql();
 		$locale = $this->session->settings->translation_locale;
 
 		return <<<GQL
@@ -52,18 +46,13 @@ class BulkTranslations extends BulkBase
 		string $filename,
 		BulkProcessingResult $result,
 		MysqliWrapper $cxn,
-		BatchedDataInserter $insert_product,
-		BatchedDataInserter $insert_variant
+		?BatchedDataInserter $insert_product,
+		?BatchedDataInserter $insert_variant
 	) : void
 	{
 		$fh = $this->checked_open_file($filename);
 
 		try {
-			$product_id = null;
-			$variant_id = null;
-			$last_pid_data_added_for = null;
-			$last_vid_data_added_for = null;
-			$decoded = null;
 			$translation_names = [];
 
 			while (!feof($fh)) {
@@ -72,7 +61,6 @@ class BulkTranslations extends BulkBase
 					break;
 				}
 
-				$previous_decoded = $decoded;
 				$decoded = json_decode($line, true, 128, JSON_THROW_ON_ERROR);
 
 				if (empty($decoded['id'])) {
@@ -109,4 +97,3 @@ class BulkTranslations extends BulkBase
 	}
 
 }
-
