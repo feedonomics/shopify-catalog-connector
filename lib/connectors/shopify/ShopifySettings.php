@@ -2,6 +2,10 @@
 
 namespace ShopifyConnector\connectors\shopify;
 
+use ShopifyConnector\connectors\shopify\metafields\MetaFilterManager;
+use ShopifyConnector\connectors\shopify\models\GID;
+use ShopifyConnector\connectors\shopify\products\ProductFilterManager;
+
 use ShopifyConnector\util\RateLimiter;
 use ShopifyConnector\util\io\InputParser;
 
@@ -12,17 +16,6 @@ use ShopifyConnector\exceptions\ValidationException;
  */
 class ShopifySettings
 {
-
-	/**
-	 * @var string Flag for the REST API
-	 */
-	const FLAG_API_REST = 'rest';
-
-	/**
-	 * @var string Flag for the GraphQL API
-	 */
-	const FLAG_API_GRAPHQL = 'graphql';
-
 
 	/**
 	 * Product filters are relevant to all modules, so this filter manager should always
@@ -71,11 +64,17 @@ class ShopifySettings
 	public bool $metafields_split_columns;
 	public bool $variant_names_split_columns;
 	public bool $inventory_level_explode;
+	public bool $include_contextual_pricing;
 	public bool $include_presentment_prices;
+	public bool $include_product_markets;
 	public bool $compare_price_override;
 	public bool $use_gmc_transition_id;
 	public bool $use_metafield_namespaces;
-	public bool $force_bulk_pieces;
+
+	/**
+	 * @var bool Flag for whether to pull with batched GraphQL (large catalog support)
+	 */
+	public bool $pull_with_batched_graphql;
 	public bool $debug;
 	public bool $include_inventory_level;
 	public bool $include_collections_meta;
@@ -83,8 +82,8 @@ class ShopifySettings
 	/*
 	 * String settings fields
 	 */
-	public string $shop_name;
-	public string $oauth_token;
+	public readonly string $shop_name;
+	public readonly string $oauth_token;
 	public string $delimiter;
 	public string $enclosure;
 	public string $escape;
@@ -93,7 +92,7 @@ class ShopifySettings
 	public string $tax_rates;
 	public string $translation_locale;
 
-	/*
+	/**
 	 * Array settings fields
 	 */
 	public array $data_types;
@@ -107,6 +106,26 @@ class ShopifySettings
 	 * @var string[] Store for the list of extra variant fields to pull
 	 */
 	public array $extra_variant_fields = [];
+
+	/**
+	 * @var string[] Store for the list of country codes to filter contextual pricing by
+	 */
+	public array $contextual_pricing_countries = [];
+
+	/**
+	 * @var string[] Store for the list of locations ids to filter contextual pricing by
+	 */
+	public array $contextual_pricing_locations = [];
+
+	/**
+	 * @var array Cached country code to field alias mappings
+	 */
+	private array $contextual_pricing_country_aliases = [];
+
+	/**
+	 * @var array Cached location to field alias mappings
+	 */
+	private array $contextual_pricing_location_aliases = [];
 
 	/**
 	 * Parse the given array of client options into a new ShopifySettings
@@ -171,14 +190,13 @@ class ShopifySettings
 		$this->metafields_split_columns = InputParser::extract_boolean($client_options, 'metafields_split_columns');
 		$this->variant_names_split_columns = InputParser::extract_boolean($client_options, 'variant_names_split_columns');
 		$this->inventory_level_explode = InputParser::extract_boolean($client_options, 'inventory_level_explode');
+		$this->include_contextual_pricing = InputParser::extract_boolean($client_options, 'include_contextual_pricing', false);
 		$this->include_presentment_prices = InputParser::extract_boolean($client_options, 'include_presentment_prices', true);
 		$this->compare_price_override = InputParser::extract_boolean($client_options, 'compare_price_override', true);
 		$this->use_gmc_transition_id = InputParser::extract_boolean($client_options, 'use_gmc_transition_id');
 		$this->use_metafield_namespaces = InputParser::extract_boolean($client_options, 'use_metafield_namespaces');
-
-		// Shopify is trash, and their graphQL fails on certain stores that have too many products condensed in too short of a span of time
-		// Yes, seriously... this forced bulking will be applied to shops with 50K+ products to increase stability.
-		$this->force_bulk_pieces = InputParser::extract_boolean($client_options, 'force_bulk_pieces', false);
+		$this->include_product_markets = InputParser::extract_boolean($client_options, 'include_product_markets', false);
+		$this->pull_with_batched_graphql = InputParser::extract_boolean($client_options, 'is_large_catalog');
 
 		$this->debug = InputParser::extract_boolean($client_options, 'debug');
 
@@ -192,16 +210,16 @@ class ShopifySettings
 
 		$this->tax_rates = $client_options['tax_rates'] ?? '';
 
-		foreach(explode(',', $client_options['extra_parent_fields'] ?? '') as $field){
+		foreach (explode(',', $client_options['extra_parent_fields'] ?? '') as $field) {
 			$field = trim($field);
-			if(!empty($field)){
+			if (!empty($field)) {
 				$this->extra_parent_fields[] = $field;
 			}
 		}
 
-		foreach(explode(',', $client_options['extra_variant_fields'] ?? '') as $field){
+		foreach (explode(',', $client_options['extra_variant_fields'] ?? '') as $field) {
 			$field = trim($field);
-			if(!empty($field)){
+			if (!empty($field)) {
 				$this->extra_variant_fields[] = $field;
 			}
 		}
@@ -215,6 +233,11 @@ class ShopifySettings
 		$this->include_collections_meta = in_array('collections_meta', $data_types);
 
 		$this->data_types = array_diff($data_types, ['inventory_level', 'collections_meta']);
+
+		$this->contextual_pricing_countries = $client_options['contextual_pricing_countries'] ?? [];
+		$this->contextual_pricing_locations = $client_options['contextual_pricing_locations'] ?? [];
+		$this->contextual_pricing_country_aliases = $this->build_contextual_pricing_country_aliases();
+		$this->contextual_pricing_location_aliases = $this->build_contextual_pricing_location_aliases();
 	}
 
 	/**
@@ -289,8 +312,11 @@ class ShopifySettings
 	 *
 	 * @return string The generated prefix for db table names
 	 */
-	private function generate_table_prefix() : string {
-		return substr(preg_replace('/[^[:alnum:]]/', '',
+	private function generate_table_prefix() : string
+	{
+		return substr(preg_replace(
+			'/[^[:alnum:]]/',
+			'',
 			$this->shop_name . microtime(true)
 		), -32);
 	}
@@ -333,25 +359,74 @@ class ShopifySettings
 	}
 
 	/**
+	 * Build the country code to contextual pricing field alias mappings.
+	 * This is called once during initialization in parse_options_into_fields() and cached.
 	 *
+	 * @return array The array of country codes to field aliases
 	 */
-	public function includes_data_type(string $type) : bool
+	private function build_contextual_pricing_country_aliases() : array
 	{
-		return array_search(
-				$type,
-				$this->get('data_types') ?? [],
-				true
-			) !== false;
-
-		/*
-		# Doing a simple, simple check using commas for delimiters
-		# This does not need to be optimized whatsoever
-		return strpos(
-			",{$this->get('data_types', '')},",
-			",{$type},"
-		) !== false;
-		*/
+		$aliases = [];
+		foreach ($this->contextual_pricing_countries as $country) {
+			$country = trim($country);
+			if ($country !== '') {
+				$aliases[$country] = strtoupper($country) . '_Price';
+			}
+		}
+		return $aliases;
 	}
 
-}
+	/**
+	 * Build the location value to contextual pricing field alias mappings.
+	 * This is called once during initialization in parse_options_into_fields() and cached.
+	 *
+	 * @return array The array of location values to field aliases
+	 */
+	private function build_contextual_pricing_location_aliases() : array
+	{
+		$aliases = [];
+		foreach ($this->contextual_pricing_locations as $locations) {
+			$loc_values = explode('|||', $locations);
+			if (count($loc_values) !== 2) {
+				continue;
+			}
 
+			$loc_id = trim($loc_values[0]);
+			$loc_name = preg_replace('/[\W]+/', '_', trim($loc_values[1]));
+
+			if ($loc_id === '') {
+				continue;
+			}
+			if ($loc_name === '') {
+				$loc_name = 'Location';
+			}
+
+			$loc_gid = new GID($loc_id);
+			$loc_id_clean = $loc_gid->get_id();
+			$aliases[$loc_id] = $loc_name . '_' . $loc_id_clean . '_Price';
+		}
+		return $aliases;
+	}
+
+	/**
+	 * Get a key value array of country codes to contextual pricing field aliases.
+	 * Returns the cached values built during initialization.
+	 *
+	 * @return array The array of country codes to field aliases
+	 */
+	public function get_contextual_pricing_country_aliases() : array
+	{
+		return $this->contextual_pricing_country_aliases;
+	}
+
+	/**
+	 * Get a key value array of location values to contextual pricing field aliases.
+	 * Returns the cached values built during initialization.
+	 *
+	 * @return array The array of location values to field aliases
+	 */
+	public function get_contextual_pricing_location_aliases() : array
+	{
+		return $this->contextual_pricing_location_aliases;
+	}
+}

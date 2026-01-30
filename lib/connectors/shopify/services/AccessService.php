@@ -2,7 +2,6 @@
 
 namespace ShopifyConnector\connectors\shopify\services;
 
-use ShopifyConnector\api\service\AccessService as clAccessService;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\AccessScopes;
 
@@ -33,27 +32,19 @@ final class AccessService
 	 * @return AccessScopes The access scopes
 	 * @throws ApiException On API errors
 	 */
-	public static function get_access_scopes_gql(SessionContainer $session) : AccessScopes
+	private static function get_access_scopes_gql(SessionContainer $session) : AccessScopes
 	{
-		return new AccessScopes($session->client->graphql_request('query AccessScopeList { currentAppInstallation { accessScopes { handle } } }'), []);
+		return new AccessScopes($session->client->graphql_request(
+			<<<GQL
+			query
+				AccessScopeList {
+					currentAppInstallation {
+						accessScopes {
+							handle
+						}
+					}
+				}
+			GQL
+		));
 	}
-
-	/**
-	 * Get the access scopes from the REST API
-	 *
-	 * @param SessionContainer $session The session container
-	 * @return AccessScopes The access scopes
-	 */
-	public static function get_access_scopes_rest(SessionContainer $session) : AccessScopes
-	{
-		$as = new clAccessService($session->client);
-		$list = $as->getAccess([]);
-		$session->set_last_call_limit();
-		return new AccessScopes(
-			$list,
-			$session->client->parseLastPaginationLinkHeader()
-		);
-	}
-
 }
-

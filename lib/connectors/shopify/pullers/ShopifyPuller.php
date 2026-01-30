@@ -13,6 +13,7 @@ use ShopifyConnector\connectors\shopify\structs\PullerParams;
 /**
  * Abstract class for pullers responsible for retrieving and storing data from
  * Shopify
+ * @deprecated
  */
 abstract class ShopifyPuller implements iDataPuller
 {
@@ -100,4 +101,3 @@ abstract class ShopifyPuller implements iDataPuller
 	}
 
 }
-

@@ -9,7 +9,6 @@ use ShopifyConnector\util\db\queries\SimpleSelectStatement;
 use ShopifyConnector\util\db\TableHandle;
 use ShopifyConnector\util\db\TemporaryTableGenerator;
 use ShopifyConnector\exceptions\InfrastructureErrorException;
-use ShopifyConnector\util\io\InputParser;
 
 /**
  * Utility for saving Shopify meta-fields for products and variants

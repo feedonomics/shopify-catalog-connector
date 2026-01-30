@@ -28,7 +28,7 @@ class ConnectionFactory {
 		$credentials = $GLOBALS['db_credentials'][$db] ?? null;
 
 		if (!$credentials){
-			ErrorLogger::log_error("Trying to connect to illegal database [${db}]");
+			ErrorLogger::log_error("Trying to connect to illegal database [{$db}]");
 			throw new InfrastructureErrorException();
 		}
 
@@ -55,7 +55,7 @@ class ConnectionFactory {
 		);
 
 		if(!$success){
-			ErrorLogger::log_error("Failed to connect to database ${db} - {$cxn->get_connect_error()}");
+			ErrorLogger::log_error("Failed to connect to database {$db} - {$cxn->get_connect_error()}");
 			throw new InfrastructureErrorException();
 		}
 

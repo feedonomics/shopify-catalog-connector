@@ -2,28 +2,13 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
-use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+use ShopifyConnector\exceptions\ApiResponseException;
 
 /**
  * Model for a Shopify GID.
  */
 final class GID
 {
-
-	/**
-	 * @var int Identifiers for the various GID types that will be encountered in processing
-	 */
-	const TYPE_UNKNOWN = 0;
-	const TYPE_PRODUCT = 1;
-	const TYPE_VARIANT = 2;
-	const TYPE_METAFIELD = 3;
-	const TYPE_COLLECTION = 4;
-	const TYPE_IMAGE = 5;
-	const TYPE_TRANSLATION = 6;
-	const TYPE_INVENTORY_LEVEL = 7;
-	const TYPE_PUBLICATION = 8;
-
-
 	/**
 	 * @var string The common GID prefix
 	 */
@@ -40,9 +25,9 @@ final class GID
 	private string $id;
 
 	/**
-	 * @var int Store for the GID type
+	 * @var ShopifyType Store for the GID type
 	 */
-	private int $type;
+	private ShopifyType $type;
 
 	/**
 	 * Model for a Shopify GID
@@ -52,7 +37,7 @@ final class GID
 	 * <p>Example: `gid://shopify/Product/632910392`</p>
 	 *
 	 * @param string $gid The raw GID to parse and store
-	 * @throws UnexpectedResponseException On invalid GIDs
+	 * @throws ApiResponseException On invalid GIDs
 	 */
 	public function __construct(string $gid)
 	{
@@ -63,8 +48,8 @@ final class GID
 		}
 		$fmtMatched = preg_match("-^{$pfx}(\w+)/(\d+)$-", $gid, $matches);
 		if ($fmtMatched !== 1) {
-			throw new UnexpectedResponseException('Shopify', sprintf(
-				'Invalid GID format: %.128s',
+			throw new ApiResponseException(sprintf(
+				'Invalid Shopify GID format: %.128s',
 				$gid
 			));
 		}
@@ -75,35 +60,19 @@ final class GID
 	}
 
 	/**
-	 * Convert the GID type from a string to the int flag matching one of
-	 * this class's constants
+	 * Convert the GID type from a string to the ShopifyType enum.
+	 *
+	 * This supports both GID types e.g. InventoryLevel and the
+	 * GraphQL type key e.g. inventoryLevel.
 	 *
 	 * @param string $type The type string (e.g. `Product`)
-	 * @return int The int value of the corresponding class constant
-	 * (constants prefixed with `TYPE_`)
+	 * @return ShopifyType
 	 */
-	public static function convert_type(string $type) : int
+	private static function convert_type(string $type) : ShopifyType
 	{
-		switch (strtolower($type)) {
-			case 'product':
-				return self::TYPE_PRODUCT;
-			case 'productvariant':
-				return self::TYPE_VARIANT;
-			case 'metafield':
-				return self::TYPE_METAFIELD;
-			case 'collection':
-				return self::TYPE_COLLECTION;
-			case 'mediaimage':
-				return self::TYPE_IMAGE;
-			case 'translation':
-				return self::TYPE_IMAGE;
-			case 'inventorylevel':
-				return self::TYPE_INVENTORY_LEVEL;
-			case 'publication':
-				return self::TYPE_PUBLICATION;
-		}
-
-		return self::TYPE_UNKNOWN;
+		return ShopifyType::tryFrom($type)
+			?? ShopifyType::tryFrom(ucfirst($type))
+			?? ShopifyType::UNKNOWN;
 	}
 
 	/**
@@ -127,24 +96,13 @@ final class GID
 	}
 
 	/**
-	 * Get the type flag of this GID
-	 *
-	 * @return int The type flag matching one of the class constants prefixed
-	 * with `TYPE_*`
-	 */
-	public function get_type() : int
-	{
-		return $this->type;
-	}
-
-	/**
 	 * Check if this GID is a product type
 	 *
 	 * @return bool TRUE if this GID is for a product
 	 */
 	public function is_product() : bool
 	{
-		return $this->type === self::TYPE_PRODUCT;
+		return $this->type === ShopifyType::PRODUCT;
 	}
 
 	/**
@@ -154,7 +112,7 @@ final class GID
 	 */
 	public function is_variant() : bool
 	{
-		return $this->type === self::TYPE_VARIANT;
+		return $this->type === ShopifyType::PRODUCT_VARIANT;
 	}
 
 	/**
@@ -164,7 +122,7 @@ final class GID
 	 */
 	public function is_metafield() : bool
 	{
-		return $this->type === self::TYPE_METAFIELD;
+		return $this->type === ShopifyType::METAFIELD;
 	}
 
 	/**
@@ -174,7 +132,7 @@ final class GID
 	 */
 	public function is_collection() : bool
 	{
-		return $this->type === self::TYPE_COLLECTION;
+		return $this->type === ShopifyType::COLLECTION;
 	}
 
 	/**
@@ -185,7 +143,7 @@ final class GID
 	public function is_media() : bool
 	{
 		# NOTE: Add other media-related types into check as they come into use
-		return $this->type === self::TYPE_IMAGE;
+		return $this->type === ShopifyType::MEDIA_IMAGE;
 	}
 
 	/**
@@ -195,7 +153,7 @@ final class GID
 	 */
 	public function is_translation() : bool
 	{
-		return $this->type === self::TYPE_TRANSLATION;
+		return $this->type === ShopifyType::TRANSLATION;
 	}
 
 	/**
@@ -205,7 +163,7 @@ final class GID
 	 */
 	public function is_inventory_level() : bool
 	{
-		return $this->type === self::TYPE_INVENTORY_LEVEL;
+		return $this->type === ShopifyType::INVENTORY_LEVEL;
 	}
 
 	/**
@@ -215,7 +173,26 @@ final class GID
 	 */
 	public function is_publication() : bool
 	{
-		return $this->type === self::TYPE_PUBLICATION;
+		return $this->type === ShopifyType::PUBLICATION;
+	}
+
+	/**
+	 * Check if this GID is a Location type
+	 *
+	 * @return bool TRUE if this GID is for a location object
+	 */
+	public function is_location() : bool
+	{
+		return $this->type === ShopifyType::LOCATION;
+	}
+
+	/**
+	 * Check if the GID is a market catalog type
+	 *
+	 * @return bool
+	 */
+	public function is_market_catalog() : bool
+	{
+		return $this->type === ShopifyType::MARKET_CATALOG;
 	}
 }
-

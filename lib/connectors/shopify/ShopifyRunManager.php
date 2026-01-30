@@ -3,6 +3,7 @@
 namespace ShopifyConnector\connectors\shopify;
 
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
+use ShopifyConnector\connectors\shopify\publications\Markets;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 
 use ShopifyConnector\util\db\MysqliWrapper;
@@ -100,6 +101,10 @@ final class ShopifyRunManager
 			# multiple entries for the same op, depending on how we decide to
 			# handle things like chunking
 			$this->modules[] = new $class($this->session);
+		}
+
+		if ($this->session->settings->include_product_markets) {
+			$this->modules[] = new Markets($this->session);
 		}
 	}
 
@@ -201,6 +206,7 @@ final class ShopifyRunManager
 			$modules[] = $m;
 		}
 
+		$cxn->reconnect();
 		foreach ($primary_module->get_products($cxn) as $product) {
 			foreach ($modules as $m) {
 				$m->add_data_to_product($cxn, $product);
@@ -250,4 +256,3 @@ final class ShopifyRunManager
 	}
 
 }
-

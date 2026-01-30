@@ -1,13 +1,13 @@
 <?php
+
 namespace ShopifyConnector\connectors\shopify\models;
 
 /**
  * Data model for a list of Shopify access scopes.
  * Related Shopify documentation:
- * https://shopify.dev/docs/api/admin-rest/2023-04/resources/accessscope
- * https://shopify.dev/docs/api/admin-graphql/2023-04/objects/AccessScope
+ * @link https://shopify.dev/docs/api/admin-graphql/latest/objects/AccessScope
  */
-final class AccessScopes extends PagedREST
+final class AccessScopes
 {
 
 	/**
@@ -27,19 +27,15 @@ final class AccessScopes extends PagedREST
 	 * ]
 	 * ```
 	 *
-	 * @param array $scopeList The access scope data returned by an API
-	 * @param array $pageLinks Pagination links as returned by
-	 *   {@see ShopifyClient::parseLastPaginationLinkHeader}
+	 * @param array $scope_list The access scope data returned by an API
 	 */
-	public function __construct(array $scopeList, array $pageLinks)
+	public function __construct(array $scope_list)
 	{
 		$scopes = [];
-		foreach ($scopeList['data']['currentAppInstallation']['accessScopes'] as $scope) {
+		foreach ($scope_list['data']['currentAppInstallation']['accessScopes'] as $scope) {
 			$scopes[] = $scope['handle'];
 		}
 		$this->scopes = $scopes;
-
-		$this->setPageInfos($pageLinks);
 	}
 
 	/**
@@ -49,9 +45,18 @@ final class AccessScopes extends PagedREST
 	 * @param string $scope The access scope to check for
 	 * @return bool TRUE if the scope is in the list, FALSE if not
 	 */
-	public function hasScope(string $scope) : bool
+	public function has_scope(string $scope) : bool
 	{
 		return in_array($scope, $this->scopes, true);
 	}
 
+	/**
+	 * Get all access scopes contained in this object.
+	 *
+	 * @return array The list of access scopes
+	 */
+	public function getScopes() : array
+	{
+		return $this->scopes;
+	}
 }

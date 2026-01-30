@@ -5,16 +5,14 @@ namespace ShopifyConnector\connectors\shopify\models;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\ShopifyUtilities;
 
-use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+use ShopifyConnector\exceptions\ApiResponseException;
+
 use ShopifyConnector\util\io\DataUtilities;
-
-
-use JsonException;
 
 /**
  * Model for a Shopify product variant.
  */
-final class ProductVariant extends FieldHaver
+class ProductVariant extends FieldHaver
 {
 
 	/**
@@ -102,12 +100,12 @@ final class ProductVariant extends FieldHaver
 	private array $variant_name_cache = [];
 	private array $variant_name_massaged_cache = [];
 
-
 	/**
 	 * Set the raw variant product data and its parent product data
 	 *
 	 * @param Product $parent Product that is the parent of this variant
 	 * @param array $variant_data Map of data for this variant
+	 * @throws ApiResponseException
 	 */
 	public function __construct(Product $parent, array $variant_data)
 	{
@@ -145,7 +143,7 @@ final class ProductVariant extends FieldHaver
 	 *
 	 * @param string $field The name of the field to get the processed value for
 	 * @return mixed The processed value for the specified field
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_processed_value(string $field)
 	{
@@ -158,19 +156,20 @@ final class ProductVariant extends FieldHaver
 			case 'product_id':
 				return (new GID($this->get('product_id', '', false)))->get_id();
 			*/
+			case 'contextual_pricing':
+				return $this->get_contextual_pricing();
 
 			case 'created_at':
 				return $this->get('createdAt', '');
 
 			case 'inventory_item_id':
-				$iid = $this->get('inventoryItem', [], false)['id'] ?? null;
-				return $iid !== null ? (new GID($iid))->get_id() : '';
+				return $this->get_inventory_item_id();
 
 			case 'inventory_quantity':
-				return $this->get('inventoryQuantity', '', false);
+				return $this->get_inventory_quantity('', false);
 				
 			case 'inventory_policy':
-				return strtolower($this->get('inventoryPolicy', ''));
+				return $this->get_inventory_policy('');
 
 			case 'link':
 				$domain = SessionContainer::get_active_session()->shop->domain ?? '';
@@ -186,8 +185,7 @@ final class ProductVariant extends FieldHaver
 				return $this->get_sale_price();
 
 			case 'requires_shipping':
-				$req_ship = $this->get('inventoryItem', [])['requiresShipping'] ?? false;
-				return $req_ship ? 'true' : 'false';
+				return $this->inventory_item_requires_shipping() ? 'true' : 'false';
 				
 			case 'taxable':
 				return $this->get('taxable', false) ? 'true' : 'false';
@@ -250,7 +248,7 @@ final class ProductVariant extends FieldHaver
 	 *
 	 * @param string $domain The Shopify store's base URL
 	 * @return string The product link for this variant
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_link(string $domain) : string
 	{
@@ -274,28 +272,55 @@ final class ProductVariant extends FieldHaver
 	}
 
 	/**
+	 * Get the contextual_pricing for this variant.
+	 *
+	 * @return string The contextual_pricing as a JSON-encoded string
+	 * @throws ApiResponseException On invalid data
+	 */
+	public function get_contextual_pricing(): string
+	{
+		$contextual_prices = [];
+		$session = SessionContainer::get_active_session();
+
+		if (!$session->settings->include_contextual_pricing) {
+			return '[]';
+		}
+
+		$country_aliases = $session->settings->get_contextual_pricing_country_aliases();
+		$location_aliases = $session->settings->get_contextual_pricing_location_aliases();
+
+		// $country_aliases is ['US' => 'US_Price', 'CA' => 'CA_Price']
+		// $location_aliases is ['gid://shopify/Location/123' => 'Store_A_123_Price']
+		foreach (array_merge($country_aliases, $location_aliases) as $value => $alias) {
+			$contextual_price = $this->get($alias, null, false);
+			if ($contextual_price !== null) {
+				$contextual_prices[$value] = $this->parse_price_structure($contextual_price);
+			}
+		}
+
+		return json_encode($contextual_prices);
+	}
+
+	/**
 	 * Get the presentment_prices for this variant.
 	 *
 	 * @return string The presentment_prices as a JSON-encoded string
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_presentment_prices() : string
 	{
 		$output_prices = [];
 
 		foreach ($this->get('presentment_prices', []) as $price) {
-			$compare_price = empty($price['compareAtPrice']) ? null : [
-				'amount' => number_format($price['compareAtPrice']['amount'],2,'.',''),
-				'currency_code' => $price['compareAtPrice']['currencyCode'],
-			];
-
-			$output_prices[] = [
-				'price' => [
-					'amount' => number_format($price['price']['amount'],2,'.',''),
-					'currency_code' => $price['price']['currencyCode'],
-				],
-				'compare_at_price' => $compare_price,
-			];
+			$parsed = $this->parse_price_structure($price);
+			
+			// Format amounts to 2 decimal places for presentment prices
+			$parsed['price']['amount'] = number_format($parsed['price']['amount'], 2, '.', '');
+			if ($parsed['compare_at_price'] !== null) {
+				$parsed['compare_at_price']['amount'] = number_format($parsed['compare_at_price']['amount'], 2, '.', '');
+			}
+			
+			$output_prices[] = $parsed;
 		}
 
 		return json_encode($output_prices);
@@ -305,7 +330,7 @@ final class ProductVariant extends FieldHaver
 	 * Get the price data for this variant.
 	 *
 	 * @return string The price as a string
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_price() : string
 	{
@@ -323,7 +348,7 @@ final class ProductVariant extends FieldHaver
 	 * Get the sale price for this variant.
 	 *
 	 * @return string The sale price as a string
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_sale_price() : string
 	{
@@ -337,36 +362,24 @@ final class ProductVariant extends FieldHaver
 		return '';
 	}
 
-	public function get_translated_inventory_management() : string
-	{
-		$value = strtolower($this->get('inventoryManagement', '', false));
-		if ($value === 'not_managed') {
-			return '';
-		}
-		return $value;
-	}
-
 	/**
 	 * Get this variant's availability.
 	 *
 	 * @return string The availability string for this variant
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_availability() : string
 	{
-		$inv_item = $this->get('inventoryItem', []);
-		$tracked_node = $inv_item['tracked'];
+		$tracked_node = $this->inventory_item_is_tracked();
+		$inventory_policy = $this->get_inventory_policy('', false);
+		$inventory_quantity = $this->get_inventory_quantity(0, false);
+        $not_available_for_sale = $this->get('availableForSale') === false;
 
-		$ip = strtolower($this->get('inventoryPolicy', '', false));
-		$iq = $this->get('inventoryQuantity', 0, false);
-
-		return (
-			($tracked_node && $iq < 1 && $ip === 'deny')
-			||
-			$this->get('availableForSale') === false
-		)
-			? self::STR_NOT_AVAILABLE
-			: self::STR_AVAILABLE;
+        return match (true) {
+            $tracked_node && $inventory_quantity < 1 && $inventory_policy === 'deny' => self::STR_NOT_AVAILABLE,
+            $not_available_for_sale => self::STR_NOT_AVAILABLE,
+            default => self::STR_AVAILABLE
+        };
 	}
 
 	/**
@@ -375,7 +388,7 @@ final class ProductVariant extends FieldHaver
 	 * "unit" and "value" keys.
 	 *
 	 * @return Array<string, mixed> An array that is guaranteed to conform to the weight node structure
-	 * @throws UnexpectedResponseException
+	 * @throws ApiResponseException
 	 */
 	private function get_weight_node() : array
 	{
@@ -449,7 +462,7 @@ final class ProductVariant extends FieldHaver
 	 * TODO: This and other image-related things need to be updated for GQL
 	 *
 	 * @return string The list of image links
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_image_link() : string
 	{
@@ -465,7 +478,7 @@ final class ProductVariant extends FieldHaver
 	 *
 	 * @param string $name The name of the option to get the value of
 	 * @return string The value of the named option
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_option_value(string $name) : string
 	{
@@ -476,7 +489,7 @@ final class ProductVariant extends FieldHaver
 	 * Get the variant image links
 	 *
 	 * @return string The list of additional image links
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_additional_image_links() : string
 	{
@@ -515,7 +528,7 @@ final class ProductVariant extends FieldHaver
 	 * - Would it be better to iterate variant's option array instead of parent's options
 	 *
 	 * @return array The variant names
-	 * @throws UnexpectedResponseException On errors encoding the variant names
+	 * @throws ApiResponseException On errors encoding the variant names
 	 */
 	private function generate_variant_names() : array
 	{
@@ -553,5 +566,93 @@ final class ProductVariant extends FieldHaver
 		return $names[$field_parts[1]] ?? null;
 	}
 
-}
+	/**
+	 * Returns the id of the inventory item for this variant.
+	 *
+	 * @return string
+	 * @throws ApiResponseException
+	 */
+	protected function get_inventory_item_id() : string
+	{
+		$iid = $this->get('inventoryItem', [], false)['id'] ?? null;
+		return $iid !== null ? (new GID($iid))->get_id() : '';
+	}
 
+	/**
+	 * Returns the inventory policy for this variant.
+	 *
+	 * @param mixed $default
+	 * @param bool $matchType
+	 * @return mixed
+	 * @throws ApiResponseException
+	 */
+	protected function get_inventory_policy(mixed $default = null, bool $matchType = true) : string
+	{
+		return strtolower($this->get('inventoryPolicy', $default, $matchType));
+	}
+
+	/**
+	 * Get the inventory quantity for this variant.
+	 *
+	 * @param mixed $default
+	 * @param bool $matchType
+	 * @return mixed
+	 * @throws ApiResponseException
+	 */
+	protected function get_inventory_quantity(mixed $default = null, bool $matchType = true) : mixed
+	{
+		return $this->get('inventoryQuantity', $default, $matchType);
+	}
+
+	/**
+	 * Returns whether this variant's inventory item is tracked.
+	 *
+	 * @return bool
+	 * @throws ApiResponseException
+	 */
+	protected function inventory_item_is_tracked() : bool
+	{
+		$inv_item = $this->get('inventoryItem', []);
+		return $inv_item['tracked'] ?? false;
+	}
+
+	/**
+	 * Returns whether this variant's inventory item requires shipping.
+	 *
+	 * @return bool
+	 * @throws ApiResponseException
+	 */
+	protected function inventory_item_requires_shipping() : bool
+	{
+		return $this->get('inventoryItem', [])['requiresShipping'] ?? false;
+	}
+
+	/**
+	 * Parse a presentment price or contextual pricing structure into a standardized output format.
+	 *
+	 * @param array $price_data Raw price data containing 'price', 'compareAtPrice', etc.
+	 * @return array Standardized price structure with snake_case keys
+	 */
+	private function parse_price_structure(array $price_data) : array
+	{
+		$converted_value = [];
+		
+		// Convert keys to snake_case
+		$converted_value['price'] = [
+			'amount' => number_format($price_data['price']['amount'], 2, '.', ''),
+			'currency_code' => $price_data['price']['currencyCode']
+		];
+
+		// Handle compareAtPrice if it exists
+		if ($price_data['compareAtPrice'] === null) {
+			$converted_value['compare_at_price'] = null;
+		} else {
+			$converted_value['compare_at_price'] = [
+				'amount' => number_format($price_data['compareAtPrice']['amount'], 2, '.', ''),
+				'currency_code' => $price_data['compareAtPrice']['currencyCode']
+			];
+		}
+		
+		return $converted_value;
+	}
+}

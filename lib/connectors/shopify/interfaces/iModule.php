@@ -12,6 +12,7 @@ use ShopifyConnector\exceptions\InfrastructureErrorException;
 
 use Generator;
 
+
 /**
  * Interface that all module main classes must implement.
  *
@@ -53,4 +54,3 @@ interface iModule
 	public function add_data_to_variant(MysqliWrapper $cxn, ProductVariant $variant) : void;
 
 }
-

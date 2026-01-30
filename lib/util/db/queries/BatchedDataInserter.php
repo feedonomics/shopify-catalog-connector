@@ -1,9 +1,7 @@
 <?php
 namespace ShopifyConnector\util\db\queries;
 
-use mysqli_sql_exception;
 use ShopifyConnector\exceptions\InfrastructureErrorException;
-use ShopifyConnector\log\ErrorLogger;
 use ShopifyConnector\util\db\MysqliWrapper;
 
 /**
@@ -44,7 +42,7 @@ class BatchedDataInserter
 	 * @var int The default query size threshold to use if it could not be
 	 * retrieved from the database (1MB)
 	 */
-	const DEFAULT_THRESHOLD = 100000;
+	const DEFAULT_THRESHOLD = 100_000;
 
 	/**
 	 * @var int Store for the calculated threshold the query will be
@@ -68,10 +66,8 @@ class BatchedDataInserter
 	 *
 	 * @param MysqliWrapper $cxn A DB connection to leverage
 	 * @param InsertStatement $is The insert statement for writing records
-	 * @throws InfrastructureErrorException If the max_allowed_packet query
-	 * failed
 	 */
-	public function __construct(MysqliWrapper $cxn, InsertStatement $is)
+	public function __construct(MysqliWrapper $cxn,InsertStatement $is)
 	{
 		$this->insert_statement = $is;
 
@@ -80,8 +76,7 @@ class BatchedDataInserter
 		$this->query_size_threshold *= .75; # Add some wiggle room for query sizes (75%)
 
 		if ($is->get_duplicate_flag() === InsertStatement::FLAG_UPDATE_ON_DUP) {
-			# Account for extra long queries including `ON DUPLICATE UPDATE`
-			# statements (50% of the 75%)
+			# Account for extra long queries including `ON DUPLICATE UPDATE` statements
 			$this->query_size_threshold *= .5;
 		}
 	}
@@ -101,8 +96,10 @@ class BatchedDataInserter
 	public function add_value_set(MysqliWrapper $cxn, array $values) : void
 	{
 		$value_size = 0;
-		foreach ($values as $v) {
+		foreach ($values as $k => $v) {
+			$v = is_array($v) ? json_encode($v) : $v;
 			$value_size += strlen($v);
+			$values[$k] = $v;
 		}
 
 		# If the newly added value set is going to exceed the threshold, run
@@ -132,24 +129,7 @@ class BatchedDataInserter
 
 		$this->query_size = 0;
 		$qry = $this->insert_statement->get_query();
-
-		try {
-			$cxn->query($qry);
-			$errno = $cxn->get_errno();
-			$err = $cxn->get_error();
-		} catch (mysqli_sql_exception $e) {
-			$errno = $e->getCode();
-			$err = $e->getMessage();
-		}
-
-		if ($errno !== 0) {
-			ErrorLogger::log_error(sprintf(
-				'DB Query error. [Message: %s] [Query: %s]',
-				$err,
-				$qry
-			));
-			throw new InfrastructureErrorException();
-		}
+		$cxn->safe_query($qry);
 	}
 
 }

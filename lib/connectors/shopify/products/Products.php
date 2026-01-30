@@ -2,7 +2,6 @@
 
 namespace ShopifyConnector\connectors\shopify\products;
 
-use ShopifyConnector\connectors\shopify\ProductFilterManager;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
 use ShopifyConnector\connectors\shopify\models\Product;
@@ -10,6 +9,8 @@ use ShopifyConnector\connectors\shopify\models\ProductVariant;
 use ShopifyConnector\connectors\shopify\pullers\BulkProducts;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
+
+use ShopifyConnector\exceptions\InfrastructureErrorException;
 
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\TableHandle;
@@ -77,6 +78,9 @@ class Products implements iModule
 			if ($this->session->settings->tax_rates) {
 				$output_fields[] = 'tax_rates';
 			}
+			if ($this->session->settings->include_contextual_pricing) {
+				$output_fields[] = 'contextual_pricing';
+			}
 			if ($this->session->settings->include_presentment_prices) {
 				$output_fields[] = 'presentment_prices';
 			}
@@ -119,7 +123,7 @@ class Products implements iModule
 	public function get_products(MysqliWrapper $cxn) : Generator
 	{
 		if ($this->table_product === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$last_retrieved_pid = 0;
@@ -127,8 +131,7 @@ class Products implements iModule
 			$result = $this->query_next_data($cxn, $this->table_product, $last_retrieved_pid);
 			$row = $result->fetch_assoc();
 			if ($row === false) {
-				# TODO: Better error? Log something? Is mysqli set up to throw instead?
-				throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving product data'));
 			}
 
 			if ($row === null) {
@@ -160,14 +163,15 @@ class Products implements iModule
 	 *
 	 * @param MysqliWrapper $cxn The database connection to query on
 	 * @param Product $product The product to pull variants for and attach variants to
+	 * @throws InfrastructureErrorException
+	 * @throws \JsonException
 	 */
 	private function add_variants_to_product(MysqliWrapper $cxn, Product $product) : void
 	{
 		$result = $this->query_data_by_parent_id($cxn, $this->table_variant, $product->id);
 		foreach ($result as $row) {
 			if ($row === false) {
-				# TODO: Better error? Log something? Is mysqli set up to throw instead?
-				throw new \Exception('Error while retrieving variant data: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving variant data'));
 			}
 			$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
 			$variant = new ProductVariant($product, $decoded_data);
@@ -189,14 +193,13 @@ class Products implements iModule
 	public function add_data_to_product(MysqliWrapper $cxn, Product $product) : void
 	{
 		if ($this->table_product === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_product, $product->id);
 		$row = $result->fetch_assoc();
 		if ($row === false) {
-			# TODO: Better error? Log something? Is mysqli set up to throw instead?
-			throw new \Exception('Error while retrieving data for individual product: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual product'));
 		}
 
 		if ($row === null || empty($row['data'])) {
@@ -213,14 +216,13 @@ class Products implements iModule
 	public function add_data_to_variant(MysqliWrapper $cxn, ProductVariant $variant) : void
 	{
 		if ($this->table_variant === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_variant, $variant->id);
 		$row = $result->fetch_assoc();
 		if ($row === false) {
-			# TODO: Better error? Log something? Is mysqli set up to throw instead?
-			throw new \Exception('Error while retrieving data for individual variant: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual variant'));
 		}
 
 		if ($row === null || empty($row['data'])) {
@@ -231,4 +233,3 @@ class Products implements iModule
 	}
 
 }
-

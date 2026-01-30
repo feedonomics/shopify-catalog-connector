@@ -14,21 +14,13 @@ use ShopifyConnector\util\db\queries\BatchedDataInserter;
  */
 class BulkCollections extends BulkBase
 {
-
-	const MAX_COLLECTION_LINE_LENGTH = 250_000;
-
 	/**
 	 *
 	 * @inheritDoc
 	 */
-	public function get_query(array $prod_query_terms = [], array $prod_search_terms = []) : string
+	public function get_query() : string
 	{
-
-		$product_filters = $this->session->settings->product_filters;
-		$meta_filters = $this->session->settings->meta_filters;
-
-		$prod_search_str = $product_filters->get_filters_gql($prod_query_terms, $prod_search_terms);
-		$meta_search_str = $meta_filters->get_filters_gql();
+		$meta_search_str = $this->session->settings->meta_filters->get_filters_gql();
 
 		$meta = !$this->session->settings->include_collections_meta ? '' : <<<GQL
 			metafields{$meta_search_str} {
@@ -75,8 +67,8 @@ class BulkCollections extends BulkBase
 		string $filename,
 		BulkProcessingResult $result,
 		MysqliWrapper $cxn,
-		BatchedDataInserter $insert_product,
-		BatchedDataInserter $insert_variant
+		?BatchedDataInserter $insert_product,
+		?BatchedDataInserter $insert_variant
 	) : void
 	{
 		$fh = $this->checked_open_file($filename);
@@ -159,4 +151,3 @@ class BulkCollections extends BulkBase
 		}
 	}
 }
-

@@ -35,7 +35,7 @@ class TemporaryTableGenerator {
 		$table_name = $table_prefix . '_' . RandomString::hex(10);
 
 		if(strlen($table_name) > 64){
-			ErrorLogger::log_error("Temporary table name too long: ${table_name}");
+			ErrorLogger::log_error("Temporary table name too long: {$table_name}");
 			throw new InfrastructureErrorException();
 		}
 

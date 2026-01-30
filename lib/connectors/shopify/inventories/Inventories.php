@@ -15,6 +15,8 @@ use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 use ShopifyConnector\util\db\TableHandle;
 
+use ShopifyConnector\exceptions\InfrastructureErrorException;
+
 use Generator;
 
 /**
@@ -80,9 +82,7 @@ class Inventories implements iModule
 		$insert_variant = new BatchedDataInserter($cxn, $this->get_variant_inserter($cxn, $this->table_variant));
 
 		$puller = new BulkInventories($this->session);
-		// The puller requires 2 inserters. Rather than setting up a dummy table and inserter for
-		// products, we will just pass the variant inserter twice and the puller will ignore it.
-		$puller->do_bulk_pull($cxn, $insert_variant, $insert_variant);
+		$puller->do_bulk_pull($cxn, null, $insert_variant);
 	}
 
 	/**
@@ -91,7 +91,7 @@ class Inventories implements iModule
 	public function get_products(MysqliWrapper $cxn) : Generator
 	{
 		if ($this->table_variant === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$last_retrieved_vid = 0;
@@ -100,8 +100,7 @@ class Inventories implements iModule
 
 			$row = $result->fetch_assoc();
 			if ($row === false) {
-				# TODO: Better error? Log something? Is mysqli set up to throw instead?
-				throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving product data'));
 			}
 
 			if ($row === null) {
@@ -149,14 +148,13 @@ class Inventories implements iModule
 	public function add_data_to_variant(MysqliWrapper $cxn, ProductVariant $variant) : void
 	{
 		if ($this->table_variant === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_variant, $variant->id);
 		$row = $result->fetch_assoc();
 		if ($row === false) {
-			# TODO: Better error? Log something? Is mysqli set up to throw instead?
-			throw new \Exception('Error while retrieving data for individual variant: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual variant'));
 		}
 
 		if ($row === null || empty($row['data'])) {
@@ -168,4 +166,3 @@ class Inventories implements iModule
 	}
 
 }
-

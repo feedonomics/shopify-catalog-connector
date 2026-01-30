@@ -43,7 +43,7 @@ final class Product extends FieldHaver
 
 		'published_status',
 		'additional_image_link',
-		'publications',
+		Field::PUBLICATIONS->value
 	];
 
 	/**
@@ -127,7 +127,7 @@ final class Product extends FieldHaver
 	 * @return mixed The processed value for the specified field
 	 * @throws UnexpectedResponseException On invalid data
 	 */
-	public function get_processed_value(string $field)
+	public function get_processed_value(string $field) : mixed
 	{
 		# NOTE: Some of the cases below include both the Shopify and the
 		#   output-mapped names. Ideally, this would only include one or the
@@ -143,9 +143,6 @@ final class Product extends FieldHaver
 
 			case 'tags':
 				return implode(', ', $this->get('tags', []));
-
-			case 'publications':
-				return $this->get_publications();
 
 			case 'published_status':
 				return $this->get_published_status();
@@ -182,7 +179,26 @@ final class Product extends FieldHaver
 				return $this->get('createdAt', '');
 		}
 
-		return $this->get($field);
+		$field_enum = Field::tryFrom($field);
+
+		return $field_enum === null
+			? $this->get($field)
+			: $this->get_processed_field_value($field_enum);
+	}
+
+	/**
+	 * Get the processed value for a field specified as an enum.
+	 *
+	 * @param Field $field
+	 * @return mixed
+	 * @throws ApiResponseException
+	 */
+	public function get_processed_field_value(Field $field) : mixed
+	{
+		return match ($field) {
+			Field::MARKETS => $this->get_markets(),
+			Field::PUBLICATIONS => $this->get_publications(),
+		};
 	}
 
 	/**
@@ -209,8 +225,28 @@ final class Product extends FieldHaver
 	 */
 	public function get_publications() : string
 	{
-		$publications = $this->get('publications');
+		$publications = $this->get(Field::PUBLICATIONS->value);
 		return $publications ? json_encode($publications) : '';
+	}
+
+	/**
+	 * Expected format of markets:
+	 * [
+	 *   ['id' => 'gid://shopify/MarketCatalog/1234', 'title' => 'Title'],
+	 *   ['id' => 'gid://shopify/MarketCatalog/5678', 'title' => 'Title'],
+	 * ]
+	 *
+	 * Output format: CSV of market titles
+	 *
+	 * @throws ApiResponseException
+	 */
+	public function get_markets() : string
+	{
+		$markets = $this->get(Field::MARKETS->value) ?? [];
+
+		return $this->output_field_csv(
+			array_column($markets, 'title')
+		);
 	}
 
 	/**

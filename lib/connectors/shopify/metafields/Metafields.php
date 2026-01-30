@@ -3,13 +3,18 @@
 namespace ShopifyConnector\connectors\shopify\metafields;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
+use ShopifyConnector\connectors\shopify\graphql\GraphQLRequest;
+use ShopifyConnector\connectors\shopify\graphql\QueryConsumer;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
+use ShopifyConnector\connectors\shopify\metafields\BatchedMetafields;
 use ShopifyConnector\connectors\shopify\models\Metafield;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
-use ShopifyConnector\connectors\shopify\pullers\BulkMetafields;
+use ShopifyConnector\connectors\shopify\pullers\Puller;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
+
+use ShopifyConnector\exceptions\InfrastructureErrorException;
 
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\TableHandle;
@@ -25,22 +30,18 @@ class Metafields implements iModule
 
 	use StandardModule;
 
-
 	const PRODUCT_META_KEY = 'product_meta';
 	const VARIANT_META_KEY = 'variant_meta';
-
-
-	private SessionContainer $session;
 
 	private ?TableHandle $table_product = null;
 	private ?TableHandle $table_variant = null;
 
 	private array $metafield_names = [];
 
-
-	public function __construct(SessionContainer $session)
+	public function __construct(
+		private readonly SessionContainer $session
+	)
 	{
-		$this->session = $session;
 	}
 
 	public function get_module_name() : string
@@ -68,8 +69,7 @@ class Metafields implements iModule
 		$insert_product = new BatchedDataInserter($cxn, $this->get_product_inserter($cxn, $this->table_product));
 		$insert_variant = new BatchedDataInserter($cxn, $this->get_variant_inserter($cxn, $this->table_variant));
 
-		$puller = new BulkMetafields($this->session);
-		$processing_result = $puller->do_bulk_pull($cxn, $insert_product, $insert_variant);
+		$processing_result = $this->get_puller()->pull($cxn, $insert_product, $insert_variant);
 		$this->metafield_names = $processing_result->result;
 	}
 
@@ -79,7 +79,7 @@ class Metafields implements iModule
 	public function get_products(MysqliWrapper $cxn) : Generator
 	{
 		if ($this->table_product === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$last_retrieved_pid = 0;
@@ -110,6 +110,8 @@ class Metafields implements iModule
 	 * @param MysqliWrapper $cxn The database connection to query on
 	 * @param int $last_retrieved_pid The product id to start from when finding this one
 	 * @return ?Product A Product representation of the retrieved data or NULL if no more
+	 * @throws InfrastructureErrorException
+	 * @throws \JsonException
 	 */
 	private function get_next_product(MysqliWrapper $cxn, int $last_retrieved_pid) : ?Product
 	{
@@ -117,8 +119,7 @@ class Metafields implements iModule
 
 		$row = $result->fetch_assoc();
 		if ($row === false) {
-			# TODO: Better error? Log something? Is mysqli set up to throw instead?
-			throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving product data'));
 		}
 
 		if ($row === null) {
@@ -131,8 +132,7 @@ class Metafields implements iModule
 
 		for ( ; $row !== null; $row = $result->fetch_assoc()) {
 			if ($row === false) {
-				# TODO: Better error? Log something? Is mysqli set up to throw instead?
-				throw new \Exception('Error while retrieving product data: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving product data'));
 			}
 
 			if (empty($row['data'])) {
@@ -161,6 +161,8 @@ class Metafields implements iModule
 	 *
 	 * @param MysqliWrapper $cxn The database connection to query on
 	 * @param Product $product The product to pull variants for and attach variants to
+	 * @throws InfrastructureErrorException
+	 * @throws \JsonException
 	 */
 	private function add_variants_to_product(MysqliWrapper $cxn, Product $product) : void
 	{
@@ -169,8 +171,7 @@ class Metafields implements iModule
 
 		foreach ($result as $row) {
 			if ($row === false) {
-				# TODO: Better error? Log something? Is mysqli set up to throw instead?
-				throw new \Exception('Error while retrieving variant data: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving variant data'));
 			}
 
 			$var_id = $row['id'];
@@ -208,7 +209,7 @@ class Metafields implements iModule
 	public function add_data_to_product(MysqliWrapper $cxn, Product $product) : void
 	{
 		if ($this->table_product === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_product, $product->id);
@@ -216,8 +217,7 @@ class Metafields implements iModule
 
 		foreach ($result as $row) {
 			if ($row === false) {
-				# TODO: Better error? Log something? Is mysqli set up to throw instead?
-				throw new \Exception('Error while retrieving data for individual product: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual product'));
 			}
 
 			if (empty($row['data'])) {
@@ -244,7 +244,7 @@ class Metafields implements iModule
 	public function add_data_to_variant(MysqliWrapper $cxn, ProductVariant $variant) : void
 	{
 		if ($this->table_variant === null) {
-			throw new \Exception('Tried to retrieve data before running: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
 		$result = $this->query_data_by_id($cxn, $this->table_variant, $variant->id);
@@ -252,8 +252,7 @@ class Metafields implements iModule
 
 		foreach ($result as $row) {
 			if ($row === false) {
-				# TODO: Better error? Log something? Is mysqli set up to throw instead?
-				throw new \Exception('Error while retrieving data for individual variant: ' . $this->get_module_name());
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual variant'));
 			}
 
 			if (empty($row['data'])) {
@@ -274,5 +273,19 @@ class Metafields implements iModule
 		}
 	}
 
-}
+	/**
+	 * @return Puller
+	 */
+	private function get_puller() : Puller
+	{
+		return $this->session->settings->pull_with_batched_graphql
+			? new BatchedMetafields(
+				$this->session,
+				new QueryConsumer(
+					new GraphQLRequest($this->session->client)
+				)
+			)
+			: new BulkMetafields($this->session);
+	}
 
+}

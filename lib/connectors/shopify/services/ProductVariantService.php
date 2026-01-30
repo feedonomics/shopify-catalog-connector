@@ -7,6 +7,7 @@ use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\ProductVariantPileGQL;
 use ShopifyConnector\connectors\shopify\structs\PullerParams;
 use ShopifyConnector\api\service\VariantService as clVariantService;
+use ShopifyConnector\exceptions\ApiResponseException;
 use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 
 /**
@@ -39,7 +40,6 @@ final class ProductVariantService
 			'created_at_max' => $dateEnd,
 			'published_status' => $publishStatus,
 		])['count']; # TODO: Forked?
-		$session->set_last_call_limit();
 		return (int)$count;
 	}
 
@@ -109,6 +109,7 @@ final class ProductVariantService
 	 * @return ProductVariantPileGQL The list of variant categories
 	 * @throws ApiException On API errors
 	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException
 	 */
 	public static function getCategories(
 		SessionContainer $session,
@@ -148,7 +149,7 @@ final class ProductVariantService
 
 		# Check for GQL errors in result
 		if (!empty($res['errors'] ?? null)) {
-			throw new Exception('Query returned errors: ' . json_encode($res['errors']));
+			throw new ApiResponseException('Shopify GraphQL query returned errors: ' . json_encode($res['errors']));
 		}
 
 		return new ProductVariantPileGQL(

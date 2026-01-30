@@ -164,5 +164,16 @@ abstract class FieldHaver
 		return $output;
 	}
 
+	/**
+	 * Output a field of values as a csv string. Empty values are removed with array_filter.
+	 *
+	 * @param array $values
+	 * @return string
+	 */
+	protected function output_field_csv(array $values) : string
+	{
+		return implode(',', array_filter($values));
+	}
+
 }
 

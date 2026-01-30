@@ -183,8 +183,7 @@ trait StandardModule
 		);
 
 		if (!$result) {
-			# TODO: Better error? Log something? Is mysqli set up to throw instead?
-			throw new \Exception('Error while running next-data query: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while running next-data query'));
 		}
 
 		return $result;
@@ -226,8 +225,7 @@ trait StandardModule
 		);
 
 		if (!$result) {
-			# TODO: Better error? Log something? Is mysqli set up to throw instead?
-			throw new \Exception('Error while running next-data query: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while running next-variant-data query'));
 		}
 
 		return $result;
@@ -262,8 +260,7 @@ trait StandardModule
 		);
 
 		if (!$result) {
-			# TODO: Better error? Return empty set and proceed? Log something?
-			throw new \Exception('Error while running by-id query: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while running by-id query'));
 		}
 
 		return $result;
@@ -300,12 +297,25 @@ trait StandardModule
 		);
 
 		if (!$result) {
-			# TODO: Better error? Log something? Is mysqli set up to throw instead?
-			throw new \Exception('Error while running by-parent-id query: ' . $this->get_module_name());
+			throw new InfrastructureErrorException($this->get_error_message('Error while running by-parent-id query'));
 		}
 
 		return $result;
 	}
 
-}
+	/**
+	 * Standardized error message for module errors.
+	 *
+	 * @param string $message
+	 * @return string
+	 */
+	private function get_error_message(string $message) : string
+	{
+		return sprintf(
+			'[Shopify] [Module %s] Error: %s',
+			$this->get_module_name(),
+			$message
+		);
+	}
 
+}

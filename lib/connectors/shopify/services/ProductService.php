@@ -2,10 +2,10 @@
 
 namespace ShopifyConnector\connectors\shopify\services;
 
+use ShopifyConnector\api\service\ProductService as clProductService;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\ProductPile;
 use ShopifyConnector\connectors\shopify\structs\PullerParams;
-use ShopifyConnector\api\service\ProductService as clProductService;
 
 /**
  * Service for making product related calls
@@ -35,7 +35,6 @@ final class ProductService
 			'created_at_max' => $dateEnd,
 			'published_status' => $publishStatus,
 		])['count']; # TODO: Forked?
-		$session->set_last_call_limit();
 		return (int)$count;
 	}
 
@@ -56,8 +55,7 @@ final class ProductService
 			: [];
 
 		$ps = new clProductService($session->client);
-		$list = $ps->listProducts($params->params, $headers);
-		$session->set_last_call_limit();
+		$list = $ps->listProducts($params->params, $headers); # TODO: Forked?
 
 		return new ProductPile(
 			$list,
@@ -66,4 +64,3 @@ final class ProductService
 	}
 
 }
-
