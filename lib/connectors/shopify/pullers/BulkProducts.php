@@ -19,7 +19,6 @@ use ShopifyConnector\util\db\queries\BatchedDataInserter;
  */
 class BulkProducts extends BulkBase
 {
-
 	/**
 	 * @inheritDoc
 	 */
@@ -290,10 +289,28 @@ class BulkProducts extends BulkBase
 			GQL;
 	}
 
+
+	/**
+	 * This method normalizes either a parentID or the most recent product ID - this is a workaround for a variation.
+	 *
+	 * @throws ApiResponseException
+	 * @return string
+	 */
+	private function generateVariantParent(array $decoded, string $defaultParentID): string
+	{
+		if (!empty($decoded['__parentId'])) {
+			return (new GID($decoded['__parentId']))->get_id();
+		}
+
+		return $defaultParentID;
+	}
+
+
 	/**
 	 * @inheritDoc
 	 * @throws ApiResponseException
 	 * @throws InfrastructureErrorException
+	 * @throws \JsonException
 	 */
 	public function process_bulk_file(
 		string $filename,
@@ -354,7 +371,7 @@ class BulkProducts extends BulkBase
 						if ($variant_data !== null) {
 							$insert_variant->add_value_set($cxn, [
 								Products::COLUMN_ID => $variant_data['id'],
-								Products::COLUMN_PARENT_ID => $product_data['id'],
+								Products::COLUMN_PARENT_ID => $this->generateVariantParent($variant_data, $product_data['id']),
 								Products::COLUMN_DATA => json_encode($variant_data),
 							]);
 							++$pull_stats->variants;
@@ -380,7 +397,7 @@ class BulkProducts extends BulkBase
 					if ($variant_data !== null) {
 						$insert_variant->add_value_set($cxn, [
 							Products::COLUMN_ID => $variant_data['id'],
-							Products::COLUMN_PARENT_ID => $product_data['id'],
+							Products::COLUMN_PARENT_ID => $this->generateVariantParent($variant_data, $product_data['id']),
 							Products::COLUMN_DATA => json_encode($variant_data),
 						]);
 						++$pull_stats->variants;
@@ -457,7 +474,7 @@ class BulkProducts extends BulkBase
 			if ($variant_data !== null) {
 				$insert_variant->add_value_set($cxn, [
 					Products::COLUMN_ID => $variant_data['id'],
-					Products::COLUMN_PARENT_ID => $product_data['id'],
+					Products::COLUMN_PARENT_ID => $this->generateVariantParent($variant_data, $product_data['id']),
 					Products::COLUMN_DATA => json_encode($variant_data),
 				]);
 				++$pull_stats->variants;
