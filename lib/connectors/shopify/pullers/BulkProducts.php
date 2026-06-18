@@ -91,7 +91,7 @@ class BulkProducts extends BulkBase
 			}
 			$allowed_extra_parent_fields = trim($allowed_extra_parent_fields);
 		}
-		$media_filter = '(query: "media_type:IMAGE")';
+		$media_filter = '(query: "media_type:IMAGE OR media_type:VIDEO OR media_type:EXTERNAL_VIDEO OR media_type:MODEL_3D")';
 
 		$fragments = [];
 		if (!empty($this->session->settings->contextual_pricing_countries)) {
@@ -188,7 +188,7 @@ class BulkProducts extends BulkBase
 						descriptionHtml
 						handle
 
-						media(query: "media_type:IMAGE") {
+						media{$media_filter} {
 							edges {
 								node {
 									id
@@ -201,6 +201,29 @@ class BulkProducts extends BulkBase
 											url
 										}
 										status
+									}
+									... on Video {
+										duration
+										sources {
+											url
+											format
+											mimeType
+											height
+											width
+										}
+									}
+									... on ExternalVideo {
+										embedUrl
+										originUrl
+										host
+									}
+									... on Model3d {
+										sources {
+											url
+											format
+											mimeType
+											filesize
+										}
 									}
 								}
 							}
@@ -405,7 +428,6 @@ class BulkProducts extends BulkBase
 
 					$variant_data = $decoded;
 					$variant_data['id'] = $gid->get_id();
-					$variant_data['media'] = [];
 
 					if ($this->session->settings->variant_names_split_columns) {
 						foreach ($variant_data['selectedOptions'] ?? [] as $variant_option) {
@@ -429,7 +451,7 @@ class BulkProducts extends BulkBase
 					//   this in-place for now in the interest of simplicity
 					$media_data = [
 						'height' => $decoded['preview']['image']['height'] ?? null,
-						'width' => $decoded['preview']['image']['height'] ?? null,
+						'width' => $decoded['preview']['image']['width'] ?? null,
 						// "src" for compatibility; should switch to using "url" naming
 						'src' => $decoded['preview']['image']['url'] ?? null,
 						'altText' => $decoded['preview']['image']['altText'] ?? null,
@@ -439,11 +461,27 @@ class BulkProducts extends BulkBase
 						continue;
 					}
 
-					if ($variant_data !== null) {
-						$variant_data['media'][] = $media_data;
-					} else {
-						$product_data['media'][] = $media_data;
+					$product_data['media'][] = $media_data;
+				} elseif ($gid->is_video()) {
+					if ($product_data === null) {
+						// Encountered video media before a product. This really
+						// shouldn't happen, so would indicate something pretty
+						// weird is going on
+						throw new InfrastructureErrorException(
+							$this->get_error_message(
+								'Unexpected format in bulk products response (v-media); declining to continue',
+							)
+						);
 					}
+
+					$video_data = $this->extract_video_data($decoded);
+
+					// Skip media with no usable source (mirrors image src===null skip)
+					if ($video_data['src'] === null) {
+						continue;
+					}
+
+					$product_data['videos'][] = $video_data;
 				} elseif ($gid->is_publication()) {
 					if ($product_data === null) {
 						// Encountered a publication before a product. This really shouldn't
@@ -491,5 +529,55 @@ class BulkProducts extends BulkBase
 			$result->result,
 			array_keys($variant_names),
 		)));
+	}
+
+	/**
+	 * Build a normalized video-media record from a decoded bulk media node.
+	 *
+	 * Covers the non-image media types (Video, ExternalVideo, Model3D). The
+	 * source URL is derived per type: hosted Video and Model3D expose playable
+	 * file sources (first source used), while ExternalVideo (YouTube/Vimeo)
+	 * exposes an embed URL.
+	 *
+	 * @param array $decoded The decoded JSONL node for a media item
+	 * @return array{media_type: ?string, src: ?string, thumbnail: ?string, duration: ?int, format: ?string}
+	 */
+	private function extract_video_data(array $decoded) : array
+	{
+		$media_type = $decoded['mediaContentType'] ?? null;
+
+		$src = match ($media_type) {
+			'VIDEO', 'MODEL_3D' => $this->non_empty_url($decoded['sources'][0]['url'] ?? null),
+			'EXTERNAL_VIDEO' => $this->non_empty_url($decoded['embedUrl'] ?? null)
+				?? $this->non_empty_url($decoded['originUrl'] ?? null),
+			default => null,
+		};
+
+		return [
+			'media_type' => $media_type,
+			'src' => $src,
+			'thumbnail' => $decoded['preview']['image']['url'] ?? null,
+			'duration' => $decoded['duration'] ?? null,
+			'format' => match ($media_type) {
+				'VIDEO', 'MODEL_3D' => $decoded['sources'][0]['format'] ?? null,
+				default => null,
+			},
+		];
+	}
+
+	/**
+	 * Normalize a possibly-empty media URL to null.
+	 *
+	 * Shopify can return an empty string (rather than null/absent) for optional
+	 * URL fields such as `embedUrl`, which a plain `??` fallback would not treat
+	 * as missing. Mapping empty to null lets callers chain fallbacks with `??`
+	 * and lets the null-source skip drop genuinely unusable media.
+	 *
+	 * @param ?string $url The raw URL value from the decoded media node
+	 * @return ?string The url, or null when it was null or an empty string
+	 */
+	private function non_empty_url(?string $url) : ?string
+	{
+		return ($url === null || $url === '') ? null : $url;
 	}
 }

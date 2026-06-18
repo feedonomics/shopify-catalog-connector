@@ -10,6 +10,9 @@ enum ShopifyType: string
 	case METAFIELD = 'Metafield';
 	case COLLECTION = 'Collection';
 	case MEDIA_IMAGE = 'MediaImage';
+	case VIDEO = 'Video';
+	case EXTERNAL_VIDEO = 'ExternalVideo';
+	case MODEL_3D = 'Model3d';
 	case TRANSLATION = 'Translation';
 	case INVENTORY_LEVEL = 'InventoryLevel';
 	case INVENTORY_ITEM = 'InventoryItem';

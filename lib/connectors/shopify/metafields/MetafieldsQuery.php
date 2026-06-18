@@ -213,7 +213,6 @@ class MetafieldsQuery implements GraphQLQuery
 									key
 									value
 									namespace
-									description
 								}
 							}
 						}
@@ -230,7 +229,6 @@ class MetafieldsQuery implements GraphQLQuery
 												key
 												value
 												namespace
-												description
 											}
 										}
 									}

@@ -10,7 +10,7 @@ use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 
 /**
- * Bulk GraphQL puller for Shopify metafields.
+ * Bulk GraphQL puller for Shopify inventories.
  */
 class BulkInventories extends BulkBase
 {
@@ -21,7 +21,8 @@ class BulkInventories extends BulkBase
 	 */
 	public function get_query() : string
 	{
-		$prod_search_str = $this->session->settings->product_filters->get_filters_gql();
+		// Use the appropriate filter method based on whether GraphQL mode is enabled
+		$variant_search_str = $this->get_variant_filters_for_graphql();
 
 		$levels = !$this->session->settings->include_inventory_level ? '' : <<<GQL
 							inventoryLevels {
@@ -49,7 +50,7 @@ class BulkInventories extends BulkBase
 			GQL;
 
 		return <<<GQL
-			productVariants{$prod_search_str} {
+			productVariants{$variant_search_str} {
 				edges {
 					node {
 						id
@@ -77,6 +78,33 @@ class BulkInventories extends BulkBase
 				}
 			}
 			GQL;
+	}
+
+	/**
+	 * Build GraphQL filter string appropriate for the productVariants endpoint.
+	 *
+	 * When GraphQL mode is enabled (gql_product_filters), returns no filters.
+	 * This is intentional because:
+	 * 1. Product-level filtering is already handled by the products query
+	 * 2. The productVariants endpoint filters on variant-level attributes, not product-level
+	 * 3. Applying translated filters could cause mismatches between products and their variants
+	 *
+	 * When in legacy mode, uses the product_filters->get_filters_gql() method directly
+	 * to maintain backwards compatibility.
+	 *
+	 * @link https://shopify.dev/docs/api/admin-graphql/latest/queries/productVariants
+	 * @return string The filter string for productVariants query
+	 */
+	private function get_variant_filters_for_graphql() : string
+	{
+		// GraphQL mode: no filters on productVariants
+		// Product-level filtering is handled by the products query
+		if ($this->session->settings->use_gql_product_filters) {
+			return '';
+		}
+
+		// Legacy mode: use the product_filters directly for backwards compatibility
+		return $this->session->settings->product_filters->get_filters_gql();
 	}
 
 	/**
