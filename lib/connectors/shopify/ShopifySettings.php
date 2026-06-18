@@ -29,6 +29,13 @@ class ShopifySettings
 	public ProductFilterManager $product_filters;
 
 	/**
+	 * @var bool Flag indicating whether GraphQL-specific product filters are in use.
+	 * When true, the product_filters manager uses enhanced GraphQL filter translation.
+	 * @readonly
+	 */
+	public bool $use_gql_product_filters = false;
+
+	/**
 	 * NOTE:
 	 * This and other non-product filter managers will likely only be relevant to a specific
 	 * module, so could be instantiated and managed there rather than here. That would make
@@ -139,10 +146,20 @@ class ShopifySettings
 		self::adjust_params($client_options);
 
 		$this->parse_options_into_fields($client_options);
-		$this->product_filters = new ProductFilterManager(
-			$client_options['product_filters'] ?? [],
-			$client_options['product_published_status'] ?? 'published' // Legacy option for fallback, or default "published"
-		);
+
+		// Use the flag set in parse_options_into_fields
+		if ($this->use_gql_product_filters) {
+			$this->product_filters = new ProductFilterManager(
+				$client_options['gql_product_filters'],
+				$client_options['product_published_status'] ?? 'published', // Legacy option for fallback, or default "published"
+				true
+			);
+		} else {
+			$this->product_filters = new ProductFilterManager(
+				$client_options['product_filters'] ?? [],
+				$client_options['product_published_status'] ?? 'published' // Legacy option for fallback, or default "published"
+			);
+		}
 		$this->meta_filters = new MetaFilterManager($client_options['meta_filters'] ?? []);
 
 		$this->raw_client_options = $client_options;
@@ -238,6 +255,9 @@ class ShopifySettings
 		$this->contextual_pricing_locations = $client_options['contextual_pricing_locations'] ?? [];
 		$this->contextual_pricing_country_aliases = $this->build_contextual_pricing_country_aliases();
 		$this->contextual_pricing_location_aliases = $this->build_contextual_pricing_location_aliases();
+
+		// Set GraphQL product filters mode flag
+		$this->use_gql_product_filters = !empty($client_options['gql_product_filters']);
 	}
 
 	/**

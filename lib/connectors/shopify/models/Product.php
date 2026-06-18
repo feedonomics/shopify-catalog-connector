@@ -43,6 +43,8 @@ final class Product extends FieldHaver
 
 		'published_status',
 		'additional_image_link',
+		'video_link',
+		'additional_video_link',
 		Field::PUBLICATIONS->value
 	];
 
@@ -153,6 +155,12 @@ final class Product extends FieldHaver
 			case 'additional_image_link':
 				return $this->get_image_links();
 
+			case 'video_link':
+				return $this->get_video_link();
+
+			case 'additional_video_link':
+				return $this->get_video_links();
+
 			/* IDs are currently being handled not as GIDs internally
 			case 'id':
 			case 'item_group_id':
@@ -258,7 +266,7 @@ final class Product extends FieldHaver
 	 */
 	public function get_image_link() : string
 	{
-		$img_data = $this->get('images') ?? $this->get('media') ?? [];
+		$img_data = $this->get('media') ?? [];
 		return $img_data[0]['src'] ?? '';
 	}
 
@@ -272,12 +280,42 @@ final class Product extends FieldHaver
 	 */
 	public function get_image_links() : string
 	{
-		$img_data = $this->get('images') ?? $this->get('media') ?? [];
+		$img_data = $this->get('media') ?? [];
 
 		# array_column will exclude missing "src"s from output
 		# array_filter will exclude empty "src"s from output
 		return implode(',', array_filter(array_column(
 			$img_data,
+			'src'
+		)));
+	}
+
+	/**
+	 * Get the first video link for this product.
+	 *
+	 * @return string The video link, or empty string if none
+	 * @throws UnexpectedResponseException On invalid data
+	 */
+	public function get_video_link() : string
+	{
+		$video_data = $this->get('videos') ?? [];
+		return $video_data[0]['src'] ?? '';
+	}
+
+	/**
+	 * Get a comma-separated list of video links for this product.
+	 *
+	 * @return string The list of video links
+	 * @throws UnexpectedResponseException On invalid data
+	 */
+	public function get_video_links() : string
+	{
+		$video_data = $this->get('videos') ?? [];
+
+		# array_column will exclude missing "src"s from output
+		# array_filter will exclude empty "src"s from output
+		return implode(',', array_filter(array_column(
+			$video_data,
 			'src'
 		)));
 	}

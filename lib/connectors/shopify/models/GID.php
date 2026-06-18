@@ -142,8 +142,25 @@ final class GID
 	 */
 	public function is_media() : bool
 	{
-		# NOTE: Add other media-related types into check as they come into use
+		# MediaImage only; other Media interface types are handled by is_video()
 		return $this->type === ShopifyType::MEDIA_IMAGE;
+	}
+
+	/**
+	 * Check if this GID is a non-image media type (video, external video,
+	 * or 3D model). Image media is handled separately via {@see is_media()};
+	 * the is_media()/is_video() split mirrors how Shopify separates MediaImage
+	 * from the other Media interface types.
+	 *
+	 * @return bool TRUE if this GID is for non-image media
+	 */
+	public function is_video() : bool
+	{
+		return in_array($this->type, [
+			ShopifyType::VIDEO,
+			ShopifyType::EXTERNAL_VIDEO,
+			ShopifyType::MODEL_3D,
+		], true);
 	}
 
 	/**

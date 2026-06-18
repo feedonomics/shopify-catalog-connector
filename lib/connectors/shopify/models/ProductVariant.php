@@ -466,8 +466,13 @@ class ProductVariant extends FieldHaver
 	 */
 	public function get_image_link() : string
 	{
-		$img_data = $this->get('image') ?? [];
-		return $img_data['url'] ?? '';
+		$url = $this->get('image')['url'] ?? null;
+
+		if ($url === null) {
+			$url = $this->product->get('media', [])[0]['src'] ?? null;
+		}
+
+		return $url ?? '';
 	}
 
 	/**
