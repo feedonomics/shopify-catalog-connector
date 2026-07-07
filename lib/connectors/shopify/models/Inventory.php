@@ -177,4 +177,3 @@ final class Inventory extends FieldHaver
 		return $fulfillment;
 	}
 }
-

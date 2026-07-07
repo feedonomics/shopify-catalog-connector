@@ -6,7 +6,9 @@ use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
+use ShopifyConnector\connectors\shopify\pullers\BulkBase;
 use ShopifyConnector\connectors\shopify\pullers\BulkTranslations;
+use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
 
@@ -31,6 +33,9 @@ class Translations implements iModule
 
 	private array $translation_names = [];
 
+	private ?BulkTranslations $puller = null;
+	private ?BatchedDataInserter $insert_product_data = null;
+
 
 	public function __construct(SessionContainer $session)
 	{
@@ -47,19 +52,34 @@ class Translations implements iModule
 		return $this->translation_names;
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function run(MysqliWrapper $cxn, PullStats $stats) : void
+	public function prepare(MysqliWrapper $cxn) : ?BulkBase
 	{
 		$prefix = $this->session->settings->get_table_prefix();
 		$this->table_product = $this->generate_product_table($cxn, "{$prefix}_translations_prod");
 
-		$insert_product = new BatchedDataInserter($cxn, $this->get_product_inserter($cxn, $this->table_product));
+		$this->insert_product_data = new BatchedDataInserter($this->get_product_inserter($cxn, $this->table_product));
 
-		$puller = new BulkTranslations($this->session);
-		$processing_result = $puller->do_bulk_pull($cxn, $insert_product, null);
-		$this->translation_names = $processing_result->result;
+		$this->puller = new BulkTranslations($this->session);
+		return $this->puller;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function run(MysqliWrapper $cxn, PullStats $stats, ?string $bulk_file = null) : void
+	{
+		if ($this->puller === null) {
+			$this->prepare($cxn);
+		}
+
+		if ($bulk_file !== null) {
+			$result = new BulkProcessingResult();
+			$this->puller->process_bulk_file($bulk_file, $result, $cxn, $this->insert_product_data, null);
+			$this->translation_names = $result->result;
+		} else {
+			$processing_result = $this->puller->do_bulk_pull($cxn, $this->insert_product_data, null);
+			$this->translation_names = $processing_result->result;
+		}
 	}
 
 	/**

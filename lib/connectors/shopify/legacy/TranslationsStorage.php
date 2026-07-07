@@ -71,7 +71,7 @@ class TranslationsStorage
 			self::COLUMN_VAL,
 		]);
 
-		$this->inserter = new BatchedDataInserter($cxn, $insert);
+		$this->inserter = new BatchedDataInserter($insert);
 		$this->selector = (new SimpleSelectStatement($this->table))
 			->add_where_column($cxn, self::COLUMN_ID)
 			->add_column($cxn, self::COLUMN_KEY)

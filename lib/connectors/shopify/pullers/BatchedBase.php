@@ -2,15 +2,14 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
+use ShopifyConnector\exceptions\ApiException;
 use ShopifyConnector\connectors\shopify\graphql\GraphQLQuery;
 use ShopifyConnector\connectors\shopify\graphql\GraphQLQueryResponseData;
 use ShopifyConnector\connectors\shopify\graphql\QueryConsumer;
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\structs\DateRange;
-
-use ShopifyConnector\exceptions\ApiException;
+use ShopifyConnector\exceptions\ApiResponseException;
 use ShopifyConnector\exceptions\InfrastructureErrorException;
-
 use Generator;
 
 /**
@@ -78,13 +77,13 @@ abstract class BatchedBase implements Puller
 		try {
 			$response_data = $this->session->client->graphql_request(<<<GQL
 			query {
-				products(first: 1, sortKey: CREATED_AT) {
-					edges {
-						node {
-							createdAt
-						}
-					}
+			  products(first: 1, sortKey: CREATED_AT) {
+				edges {
+				  node {
+					createdAt
+				  }
 				}
+			  }
 			}
 			GQL);
 

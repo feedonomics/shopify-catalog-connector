@@ -6,7 +6,9 @@ use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
+use ShopifyConnector\connectors\shopify\pullers\BulkBase;
 use ShopifyConnector\connectors\shopify\pullers\BulkProducts;
+use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
 
@@ -42,6 +44,13 @@ class Products implements iModule
 	private ?array $output_fields = null;
 
 	private array $variant_names = [];
+
+	private array $product_cache = [];
+	private array $variant_cache = [];
+
+	private ?BulkProducts $puller = null;
+	private ?BatchedDataInserter $insert_product_batched = null;
+	private ?BatchedDataInserter $insert_variant_batched = null;
 
 
 	public function __construct(SessionContainer $session)
@@ -100,21 +109,36 @@ class Products implements iModule
 		return $this->output_fields;
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function run(MysqliWrapper $cxn, PullStats $stats) : void
+	public function prepare(MysqliWrapper $cxn) : ?BulkBase
 	{
 		$prefix = $this->session->settings->get_table_prefix();
 		$this->table_product = $this->generate_product_table($cxn, "{$prefix}_products");
 		$this->table_variant = $this->generate_variant_table($cxn, "{$prefix}_variants");
 
-		$insert_product = new BatchedDataInserter($cxn, $this->get_product_inserter($cxn, $this->table_product));
-		$insert_variant = new BatchedDataInserter($cxn, $this->get_variant_inserter($cxn, $this->table_variant));
+		$this->insert_product_batched = new BatchedDataInserter($this->get_product_inserter($cxn, $this->table_product));
+		$this->insert_variant_batched = new BatchedDataInserter($this->get_variant_inserter($cxn, $this->table_variant));
 
-		$puller = new BulkProducts($this->session);
-		$processing_result = $puller->do_bulk_pull($cxn, $insert_product, $insert_variant);
-		$this->variant_names = $processing_result->result;
+		$this->puller = new BulkProducts($this->session);
+		return $this->puller;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function run(MysqliWrapper $cxn, PullStats $stats, ?string $bulk_file = null) : void
+	{
+		if ($this->puller === null) {
+			$this->prepare($cxn);
+		}
+
+		if ($bulk_file !== null) {
+			$result = new BulkProcessingResult();
+			$this->puller->process_bulk_file($bulk_file, $result, $cxn, $this->insert_product_batched, $this->insert_variant_batched);
+			$this->variant_names = $result->result;
+		} else {
+			$processing_result = $this->puller->do_bulk_pull($cxn, $this->insert_product_batched, $this->insert_variant_batched);
+			$this->variant_names = $processing_result->result;
+		}
 	}
 
 	/**
@@ -187,6 +211,48 @@ class Products implements iModule
 		}
 	}
 
+	public function preload_products(MysqliWrapper $cxn, array $product_ids) : void
+	{
+		if ($this->table_product === null || empty($product_ids)) {
+			return;
+		}
+
+		$this->product_cache = [];
+		$result = $this->query_data_by_ids($cxn, $this->table_product, $product_ids);
+
+		while ($row = $result->fetch_assoc()) {
+			if ($row === false) {
+				break;
+			}
+			// Products table has one row per product
+			$this->product_cache[(int)$row['id']] = $row['data'];
+		}
+	}
+
+	public function preload_variants(MysqliWrapper $cxn, array $product_ids) : void
+	{
+		if ($this->table_variant === null || empty($product_ids)) {
+			return;
+		}
+
+		$this->variant_cache = [];
+		$result = $this->query_data_by_parent_ids($cxn, $this->table_variant, $product_ids);
+
+		while ($row = $result->fetch_assoc()) {
+			if ($row === false) {
+				break;
+			}
+			$variant_id = (int)$row['id'];
+			$this->variant_cache[$variant_id] = $row;
+		}
+	}
+
+	public function clear_preload_cache() : void
+	{
+		$this->product_cache = [];
+		$this->variant_cache = [];
+	}
+
 	/**
 	 * @inheritDoc
 	 */
@@ -196,17 +262,23 @@ class Products implements iModule
 			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
-		$result = $this->query_data_by_id($cxn, $this->table_product, $product->id);
-		$row = $result->fetch_assoc();
-		if ($row === false) {
-			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual product'));
+		$data = null;
+		if (isset($this->product_cache[$product->id])) {
+			$data = $this->product_cache[$product->id];
+		} else {
+			$result = $this->query_data_by_id($cxn, $this->table_product, $product->id);
+			$row = $result->fetch_assoc();
+			if ($row === false) {
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual product'));
+			}
+			$data = $row['data'] ?? null;
 		}
 
-		if ($row === null || empty($row['data'])) {
+		if (empty($data)) {
 			return;
 		}
 
-		$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
+		$decoded_data = json_decode($data, true, 128, JSON_THROW_ON_ERROR);
 		$product->add_data($decoded_data);
 	}
 
@@ -219,16 +291,22 @@ class Products implements iModule
 			throw new InfrastructureErrorException($this->get_error_message('Tried to retrieve data before run()'));
 		}
 
-		$result = $this->query_data_by_id($cxn, $this->table_variant, $variant->id);
-		$row = $result->fetch_assoc();
-		if ($row === false) {
-			throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual variant'));
+		$data = null;
+		if (isset($this->variant_cache[$variant->id])) {
+			$data = $this->variant_cache[$variant->id]['data'] ?? null;
+		} else {
+			$result = $this->query_data_by_id($cxn, $this->table_variant, $variant->id);
+			$row = $result->fetch_assoc();
+			if ($row === false) {
+				throw new InfrastructureErrorException($this->get_error_message('Error while retrieving data for individual variant'));
+			}
+			$data = $row['data'] ?? null;
 		}
 
-		if ($row === null || empty($row['data'])) {
+		if (empty($data)) {
 			return;
 		}
-		$decoded_data = json_decode($row['data'], true, 128, JSON_THROW_ON_ERROR);
+		$decoded_data = json_decode($data, true, 128, JSON_THROW_ON_ERROR);
 		$variant->add_data($decoded_data);
 	}
 

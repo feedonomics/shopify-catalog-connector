@@ -5,15 +5,11 @@ use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\exceptions\BulkErrorException;
 use ShopifyConnector\connectors\shopify\models\BulkResult;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
-
-
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 use ShopifyConnector\exceptions\ApiException;
 use ShopifyConnector\exceptions\ApiResponseException;
 use ShopifyConnector\exceptions\InfrastructureErrorException;
-
-
 use Exception;
 use ShopifyConnector\util\File_Utilities;
 
@@ -161,7 +157,7 @@ abstract class BulkBase implements Puller
 		?BatchedDataInserter $insert_variant
 	) : BulkProcessingResult
 	{
-		$runres = $this->run_bulk_query($this->get_query());
+		$runres = $this->submit_bulk_query($this->get_query());
 
 		// Bulk operations can take hours to complete, close this until we need it later.
 		$cxn->close();
@@ -170,7 +166,7 @@ abstract class BulkBase implements Puller
 
 		// Reconnect now that the bulk wait is over
 		$cxn->reconnect();
-		$this->session->set_current_bulk_id(null);
+		$this->session->remove_bulk_id($runres->id);
 
 		$result = new BulkProcessingResult();
 		$this->process_bulk_file($data_file, $result, $cxn, $insert_product, $insert_variant);
@@ -201,7 +197,7 @@ abstract class BulkBase implements Puller
 	 * @throws ApiResponseException
 	 * @throws BulkErrorException
 	 */
-	private function run_bulk_query(string $query) : BulkResult
+	public function submit_bulk_query(string $query) : BulkResult
 	{
 		$fields = self::BULK_OP_FIELDS;
 		$bqry = <<<GQL
@@ -233,7 +229,7 @@ abstract class BulkBase implements Puller
 
 			try {
 				$res = new BulkResult($rawres);
-				$this->session->set_current_bulk_id($res->id);
+				$this->session->add_bulk_id($res->id);
 			} catch (BulkErrorException $e) {
 				$res = null; // Unset any previous response
 
@@ -317,7 +313,7 @@ abstract class BulkBase implements Puller
 	 * @throws ApiException On invalid GQL response
 	 * @throws ApiResponseException
 	 */
-	private function poll_for_bulk_complete(string $gid) : BulkResult
+	public function poll_for_bulk_complete(string $gid) : BulkResult
 	{
 		$res = null;
 		$pcount = 0;
@@ -402,7 +398,7 @@ abstract class BulkBase implements Puller
 	 * @throws ApiException On invalid API response
 	 * @throws BulkErrorException
 	 */
-	private function check_status(string $gid) : BulkResult
+	public function check_status(string $gid) : BulkResult
 	{
 		$fields = self::BULK_OP_FIELDS;
 		return new BulkResult($this->session->client->graphql_request("{
@@ -421,7 +417,7 @@ abstract class BulkBase implements Puller
 	 * @return string The name of the file the data was downloaded to
 	 * @throws ApiResponseException
 	 */
-	private function retrieve_bulk_file(BulkResult $br) : string
+	public function retrieve_bulk_file(BulkResult $br) : string
 	{
 		if (empty($br->url)) {
 			throw new ApiResponseException(
@@ -482,7 +478,14 @@ abstract class BulkBase implements Puller
 	 */
 	final protected function checked_read_line($fh, int $maxlen = self::MAX_LINE_LENGTH) : ?string
 	{
-		$line = fgets($fh, $maxlen);
+		// NB: deliberately NOT fgets($fh, $maxlen). PHP's fgets() with a large
+		// length cap is pathologically slow -- ~600x slower than reading the same
+		// line without the cap -- and $maxlen is large by design. stream_get_line()
+		// reads up to $maxlen bytes or to the newline, whichever comes first, stays
+		// fast regardless of $maxlen, and bounds memory the same way. It strips the
+		// trailing "\n"; every caller json_decode()s the result, which does not
+		// depend on the delimiter. See FINT-727.
+		$line = stream_get_line($fh, $maxlen, "\n");
 
 		if ($line === false) {
 			if (feof($fh)) {
@@ -491,33 +494,52 @@ abstract class BulkBase implements Puller
 
 			throw new InfrastructureErrorException(
 				$this->get_error_message(
-					'Error occurred reading line in ' . __CLASS__
+					'Error occurred reading line in ' . static::class
 				)
 			);
 		}
 
-		if ($line[strlen($line) - 1] !== "\n") {
-			# Advance to next line, skip rest of too-long line
-			$max_skip_tries = 250; # 250 * 4kB => 1MB
-			while ($line !== false && $line[strlen($line) - 1] !== "\n") {
-				$line = fgets($fh, 4096);
-				if (--$max_skip_tries <= 0) {
-					# Something is going horribly wrong or a result line is just atrociously long.
-					# Either way, things won't be able to proceed gracefully, so throw up something
-					# lower than generic_exception would. Perhaps this could be handled more formally
-					# with something like a FatalException type.
-					throw new ApiResponseException(
-						'Response file contains a line entry too long to processes.'
-					);
-				}
-			}
+		// Once the stream is exhausted stream_get_line() returns an empty string
+		// rather than false; treat that as end-of-file, not a blank line.
+		if ($line === '' && feof($fh)) {
+			return null;
+		}
 
+		// A returned string of exactly $maxlen bytes means the line reached the
+		// cap before a newline was found, so it is too long to frame safely.
+		// Bail rather than emit a truncated, mis-framed record.
+		if (strlen($line) >= $maxlen) {
 			throw new ApiResponseException(
-				'Line length exceeded while processing in ' . __CLASS__
+				sprintf(
+					'Line length exceeded while processing in %s (%s, limit %d).',
+					static::class,
+					$this->describe_line_entity($line),
+					$maxlen
+				)
 			);
 		}
 
 		return $line;
+	}
+
+	/**
+	 * Best-effort description of the entity referenced at the start of a JSONL
+	 * line, for inclusion in diagnostic error messages. Looks for the first
+	 * Shopify GID in a bounded prefix of the chunk; if none is found, falls
+	 * back to a sanitized printable prefix so the line shape can be inspected.
+	 */
+	private function describe_line_entity(string $chunk) : string
+	{
+		$prefix = substr($chunk, 0, 1024);
+		if (preg_match('#gid://shopify/[A-Za-z]+/\d+#', $prefix, $m)) {
+			return 'entity ' . $m[0];
+		}
+
+		# No GID found — surface a sanitized prefix so we can see what kind of
+		# line this actually is (malformed response, unexpected field order, etc.)
+		$sample = substr($chunk, 0, 200);
+		$sanitized = addcslashes($sample, "\0..\37\177..\377\\\"");
+		return 'entity unknown; line begins with: "' . $sanitized . '"';
 	}
 
 }

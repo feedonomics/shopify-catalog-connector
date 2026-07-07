@@ -38,6 +38,15 @@ abstract class ShopifySettingsValidator extends BaseValidator {
 				'any'
 			]);
 		}
+
+		# translations_locale is required when translations data is requested
+		$data_types = $input['data_types'] ?? '';
+		if(is_array($data_types)){
+			$data_types = implode(',', $data_types);
+		}
+		if(str_contains($data_types, 'translations')){
+			self::required($input, 'translations_locale');
+		}
 	}
 
 }

@@ -4,9 +4,8 @@ namespace ShopifyConnector\connectors\shopify\models;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\ShopifyUtilities;
-
+use ShopifyConnector\constants\Fields;
 use ShopifyConnector\exceptions\ApiResponseException;
-
 use ShopifyConnector\util\io\DataUtilities;
 
 /**
@@ -68,6 +67,8 @@ class ProductVariant extends FieldHaver
 		'material',
 		'additional_variant_image_link',
 		'variant_names',
+        Fields::PULLED_TIME->value,
+        Fields::UNIQUE_ID->value,
 	];
 
 
@@ -149,6 +150,10 @@ class ProductVariant extends FieldHaver
 	{
 		# TODO: Default to '' for ids good or bad?
 		switch ($field) {
+            case Fields::UNIQUE_ID->value:
+                return $this->get_processed_value('id');
+            case Fields::PULLED_TIME->value:
+                return time();
 			/* IDs are currently being handled not as GIDs internally
 			case 'id':
 				return (new GID($this->get('id', '', false)))->get_id();

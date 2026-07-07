@@ -2,12 +2,12 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
-use ShopifyConnector\connectors\shopify\SessionContainer;
-use ShopifyConnector\connectors\shopify\PullParams;
 use ShopifyConnector\connectors\shopify\interfaces\iDataList;
 use ShopifyConnector\connectors\shopify\interfaces\iDataPuller;
 use ShopifyConnector\connectors\shopify\interfaces\iPagedResponse;
 use ShopifyConnector\connectors\shopify\models\EmptyDataList;
+use ShopifyConnector\connectors\shopify\PullParams;
+use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\structs\PullerParams;
 
 /**
@@ -101,3 +101,4 @@ abstract class ShopifyPuller implements iDataPuller
 	}
 
 }
+

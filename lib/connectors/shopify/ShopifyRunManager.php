@@ -3,13 +3,13 @@
 namespace ShopifyConnector\connectors\shopify;
 
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
+use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\publications\Markets;
+use ShopifyConnector\connectors\shopify\pullers\BulkBase;
+use ShopifyConnector\connectors\shopify\pullers\BulkOperationManager;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
-
 use ShopifyConnector\util\db\MysqliWrapper;
-
 use ShopifyConnector\exceptions\ValidationException;
-
 use Generator;
 
 /**
@@ -43,6 +43,8 @@ final class ShopifyRunManager
 		'id', # Variant id
 		'item_group_id', # Product id
 	];
+
+	const OUTPUT_BATCH_SIZE = 1000;
 
 	/**
 	 * The order of modules here is the order they will be given precedence as
@@ -133,7 +135,44 @@ final class ShopifyRunManager
 	{
 		$this->session->set_run_stage(SessionContainer::STAGE_PULLING);
 
-		foreach ($this->modules as $m) {
+		// Phase 1: Prepare all modules (create temp tables, inserters, get pullers)
+		$bulk_pullers = []; // module_index => BulkBase
+		$bulk_module_map = []; // module_index => iModule
+
+		foreach ($this->modules as $module_index => $m) {
+			$module_name = $m->get_module_name();
+			if (!isset($this->session->pull_stats[$module_name])) {
+				$this->session->pull_stats[$module_name] = new PullStats();
+			}
+
+			$puller = $m->prepare($cxn);
+			if ($puller !== null) {
+				$bulk_pullers[$module_index] = $puller;
+				$bulk_module_map[$module_index] = $m;
+			}
+		}
+
+		// Phase 2: Run all bulk operations in parallel
+		if (!empty($bulk_pullers)) {
+			$manager = new BulkOperationManager($this->session);
+
+			$cxn->close();
+			$files = $manager->run_parallel($bulk_pullers);
+			$cxn->reconnect();
+
+			// Phase 3: Process downloaded files into MySQL sequentially
+			foreach ($files as $module_index => $file_path) {
+				$m = $bulk_module_map[$module_index];
+				$module_name = $m->get_module_name();
+				$m->run($cxn, $this->session->pull_stats[$module_name], $file_path);
+			}
+		}
+
+		// Phase 4: Run any non-bulk modules normally (e.g. BatchedMetafields)
+		foreach ($this->modules as $module_index => $m) {
+			if (isset($bulk_module_map[$module_index])) {
+				continue; // Already handled via parallel bulk
+			}
 			$module_name = $m->get_module_name();
 			if (!isset($this->session->pull_stats[$module_name])) {
 				$this->session->pull_stats[$module_name] = new PullStats();
@@ -196,37 +235,85 @@ final class ShopifyRunManager
 			return;
 		}
 
-		$modules = [];
+		$secondary_modules = [];
 		$primary_module = $this->determine_primary_module();
 
 		foreach ($this->modules as $m) {
 			if ($m === $primary_module) {
 				continue;
 			}
-			$modules[] = $m;
+			$secondary_modules[] = $m;
 		}
 
 		$cxn->reconnect();
+
+		// Collect products from the generator in batches
+		$batch = [];
+
 		foreach ($primary_module->get_products($cxn) as $product) {
-			foreach ($modules as $m) {
+			$batch[] = $product;
+
+			if (count($batch) >= self::OUTPUT_BATCH_SIZE) {
+				yield from $this->process_output_batch($cxn, $batch, $secondary_modules, $output_fields);
+				$batch = [];
+			}
+		}
+
+		// Process any remaining products
+		if (!empty($batch)) {
+			yield from $this->process_output_batch($cxn, $batch, $secondary_modules, $output_fields);
+		}
+	}
+
+	/**
+	 * Process a batch of products: preload secondary data, merge, and yield output rows.
+	 *
+	 * @param MysqliWrapper $cxn
+	 * @param Product[] $batch
+	 * @param iModule[] $secondary_modules
+	 * @param string[] $output_fields
+	 * @return Generator
+	 */
+	private function process_output_batch(
+		MysqliWrapper $cxn,
+		array $batch,
+		array $secondary_modules,
+		array $output_fields
+	) : Generator
+	{
+		$product_ids = array_map(fn(Product $p) => $p->id, $batch);
+
+		// Preload secondary module data for the batch
+		foreach ($secondary_modules as $m) {
+			$m->preload_products($cxn, $product_ids);
+			$m->preload_variants($cxn, $product_ids);
+		}
+
+		// Process each product
+		foreach ($batch as $product) {
+			foreach ($secondary_modules as $m) {
 				$m->add_data_to_product($cxn, $product);
 			}
 
 			$product_data = $product->get_output_data($output_fields);
 
-			// If a product has no associated variants, still output the product's data alone
 			if (empty($product->get_variants())) {
 				yield $product_data;
 				continue;
 			}
 
 			foreach ($product->get_variants() as $variant) {
-				foreach ($modules as $m) {
+				foreach ($secondary_modules as $m) {
 					$m->add_data_to_variant($cxn, $variant);
 				}
 
 				yield array_merge($product_data, $variant->get_output_data($output_fields));
 			}
+		}
+
+		// Clear caches
+		foreach ($secondary_modules as $m) {
+			$m->clear_preload_cache();
 		}
 	}
 
@@ -256,3 +343,4 @@ final class ShopifyRunManager
 	}
 
 }
+
