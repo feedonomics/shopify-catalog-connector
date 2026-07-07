@@ -5,7 +5,6 @@ namespace ShopifyConnector\connectors\shopify\pullers;
 use ShopifyConnector\connectors\shopify\inventories\Inventories;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
-
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 
@@ -116,8 +115,7 @@ class BulkInventories extends BulkBase
 		MysqliWrapper $cxn,
 		?BatchedDataInserter $insert_product,
 		?BatchedDataInserter $insert_variant
-	) : void
-	{
+	) : void {
 		$fh = $this->checked_open_file($filename);
 
 		try {
@@ -164,7 +162,6 @@ class BulkInventories extends BulkBase
 					$last_variant_data = $decoded;
 					$last_inv_item_id = (new GID($decoded['inventoryItem']['id']))->get_id();
 					$levels_accumulator = [];
-
 				} elseif ($gid->is_inventory_level()) {
 					$loc_id = $decoded['location']['id'] ?? null;
 					$loc_id = $loc_id === null ? null : (new GID($loc_id))->get_id();
@@ -184,7 +181,6 @@ class BulkInventories extends BulkBase
 						'location_name' => $decoded['location']['name'] ?? '',
 						'fulfillment_service' => $decoded['location']['fulfillmentService'] ?? '',
 					];
-
 				} else {
 					# Not a type we were expecting.
 					# I guess just silently skip...
@@ -215,11 +211,8 @@ class BulkInventories extends BulkBase
 
 			// Commit anything remaining in the batched inserters
 			$insert_variant->run_query($cxn);
-
 		} finally {
 			fclose($fh);
 		}
-
 	}
-
 }

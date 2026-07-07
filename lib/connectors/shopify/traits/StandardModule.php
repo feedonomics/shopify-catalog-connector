@@ -318,4 +318,103 @@ trait StandardModule
 		);
 	}
 
+	// ---- Batch query methods ----
+
+	/**
+	 * Read data for multiple IDs in one query.
+	 *
+	 * @param MysqliWrapper $cxn
+	 * @param TableHandle $table
+	 * @param int[] $ids
+	 * @return mysqli_result
+	 * @throws InfrastructureErrorException
+	 */
+	private function query_data_by_ids(MysqliWrapper $cxn, TableHandle $table, array $ids) : mysqli_result
+	{
+		if (empty($ids)) {
+			throw new InfrastructureErrorException($this->get_error_message('Empty ID list in batch query'));
+		}
+
+		$col_id = self::COLUMN_ID;
+		$col_data = self::COLUMN_DATA;
+		$table_name = $table->get_table_name();
+		$id_list = implode(',', array_map('intval', $ids));
+
+		$result = $cxn->safe_query(<<<SQL
+			SELECT `{$col_id}` AS id, `{$col_data}` AS data
+			FROM `{$table_name}`
+			WHERE `{$col_id}` IN ({$id_list})
+			ORDER BY `{$col_id}` ASC
+			SQL
+		);
+
+		if (!$result) {
+			throw new InfrastructureErrorException($this->get_error_message('Error while running by-ids query'));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Read variant data for multiple parent IDs in one query.
+	 *
+	 * @param MysqliWrapper $cxn
+	 * @param TableHandle $table
+	 * @param int[] $parent_ids
+	 * @return mysqli_result
+	 * @throws InfrastructureErrorException
+	 */
+	private function query_data_by_parent_ids(MysqliWrapper $cxn, TableHandle $table, array $parent_ids) : mysqli_result
+	{
+		if (empty($parent_ids)) {
+			throw new InfrastructureErrorException($this->get_error_message('Empty parent ID list in batch query'));
+		}
+
+		$col_id = self::COLUMN_ID;
+		$col_data = self::COLUMN_DATA;
+		$col_parent_id = self::COLUMN_PARENT_ID;
+		$table_name = $table->get_table_name();
+		$id_list = implode(',', array_map('intval', $parent_ids));
+
+		$result = $cxn->safe_query(<<<SQL
+			SELECT var.`{$col_id}` AS id, var.`{$col_parent_id}` AS parent_id, var.`{$col_data}` AS data
+			FROM `{$table_name}` var
+			WHERE var.`{$col_parent_id}` IN ({$id_list})
+			ORDER BY var.`{$col_parent_id}` ASC, var.`{$col_id}` ASC
+			SQL
+		);
+
+		if (!$result) {
+			throw new InfrastructureErrorException($this->get_error_message('Error while running by-parent-ids query'));
+		}
+
+		return $result;
+	}
+
+	// ---- Default preload implementations (no-ops) ----
+
+	public function preload_products(MysqliWrapper $cxn, array $product_ids) : void
+	{
+		// Default no-op. Modules override to implement batch preloading.
+	}
+
+	public function preload_variants(MysqliWrapper $cxn, array $product_ids) : void
+	{
+		// Default no-op. Modules override to implement batch preloading.
+	}
+
+	public function clear_preload_cache() : void
+	{
+		// Default no-op. Modules override to clear their caches.
+	}
+
+	/**
+	 * Default prepare implementation — returns null (no bulk puller).
+	 * Modules override to set up tables and return their puller.
+	 */
+	public function prepare(MysqliWrapper $cxn) : ?\ShopifyConnector\connectors\shopify\pullers\BulkBase
+	{
+		return null;
+	}
+
 }

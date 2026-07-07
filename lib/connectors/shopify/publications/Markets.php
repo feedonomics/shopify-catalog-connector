@@ -6,8 +6,10 @@ use ShopifyConnector\connectors\shopify\interfaces\iModule;
 use ShopifyConnector\connectors\shopify\models\Field;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
+use ShopifyConnector\connectors\shopify\pullers\BulkBase;
 use ShopifyConnector\connectors\shopify\pullers\BulkMarkets;
 use ShopifyConnector\connectors\shopify\SessionContainer;
+use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
 use ShopifyConnector\util\db\MysqliWrapper;
@@ -25,6 +27,9 @@ class Markets implements iModule
 	 * @var TableHandle|null
 	 */
 	private ?TableHandle $product_table = null;
+
+	private ?BulkMarkets $puller = null;
+	private ?BatchedDataInserter $insert_product_data = null;
 
 	/**
 	 * @param SessionContainer $session
@@ -52,15 +57,30 @@ class Markets implements iModule
 		return [Field::MARKETS->value];
 	}
 
+	public function prepare(MysqliWrapper $cxn) : ?BulkBase
+	{
+		$this->set_product_table_handle($this->generate_product_table($cxn, "{$this->session->settings->get_table_prefix()}_markets_prod"));
+		$this->insert_product_data = new BatchedDataInserter($this->get_product_inserter($cxn, $this->product_table));
+
+		$this->puller = new BulkMarkets($this->session);
+		return $this->puller;
+	}
+
 	/**
 	 * @inheritDoc
 	 */
-	public function run(MysqliWrapper $cxn, PullStats $stats) : void
+	public function run(MysqliWrapper $cxn, PullStats $stats, ?string $bulk_file = null) : void
 	{
-		$this->set_product_table_handle($this->generate_product_table($cxn, "{$this->session->settings->get_table_prefix()}_markets_prod"));
-		$insert_product = new BatchedDataInserter($cxn, $this->get_product_inserter($cxn, $this->product_table));
-		$puller = new BulkMarkets($this->session);
-		$puller->do_bulk_pull($cxn, $insert_product, null);
+		if ($this->puller === null) {
+			$this->prepare($cxn);
+		}
+
+		if ($bulk_file !== null) {
+			$result = new BulkProcessingResult();
+			$this->puller->process_bulk_file($bulk_file, $result, $cxn, $this->insert_product_data, null);
+		} else {
+			$this->puller->do_bulk_pull($cxn, $this->insert_product_data, null);
+		}
 	}
 
 	/**

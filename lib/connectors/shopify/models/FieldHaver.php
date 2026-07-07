@@ -2,8 +2,7 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
-use ShopifyConnector\exceptions\api\UnexpectedResponseException;
-
+use ShopifyConnector\exceptions\ApiResponseException;
 
 /**
  * Base class for models that contain accessible fields and that will
@@ -12,7 +11,6 @@ use ShopifyConnector\exceptions\api\UnexpectedResponseException;
  * simple and consistent interface for working with the data contained
  * therein.
  */
-
 abstract class FieldHaver
 {
 
@@ -71,7 +69,7 @@ abstract class FieldHaver
 	 * @param mixed $default A default value to use when `key` is not present
 	 * @param bool $matchType TRUE to enforce type-matching for present values
 	 * @return mixed The value at the given key, falling back to the given default
-	 * @throws UnexpectedResponseException On type mis-match when `matchType` is TRUE
+	 * @throws ApiResponseException On type mis-match when `matchType` is TRUE
 	 */
 	public final function get(string $key, $default = null, bool $matchType = true)
 	{
@@ -85,8 +83,8 @@ abstract class FieldHaver
 			&& $matchType
 			&& gettype($val) !== gettype($default)
 		) {
-			throw new UnexpectedResponseException('Shopify', sprintf(
-				'Invalid data type (%s -- expected %s) received for `%s` in %s',
+			throw new ApiResponseException(sprintf(
+				'Shopify: Invalid data type (%s -- expected %s) received for `%s` in %s',
 				gettype($val),
 				gettype($default),
 				$key,
@@ -174,6 +172,4 @@ abstract class FieldHaver
 	{
 		return implode(',', array_filter($values));
 	}
-
 }
-

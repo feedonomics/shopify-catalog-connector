@@ -7,7 +7,9 @@ use ShopifyConnector\connectors\shopify\interfaces\iModule;
 use ShopifyConnector\connectors\shopify\models\Inventory;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
+use ShopifyConnector\connectors\shopify\pullers\BulkBase;
 use ShopifyConnector\connectors\shopify\pullers\BulkInventories;
+use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\traits\StandardModule;
 
@@ -36,6 +38,9 @@ class Inventories implements iModule
 	private SessionContainer $session;
 
 	private ?TableHandle $table_variant = null;
+
+	private ?BulkInventories $puller = null;
+	private ?BatchedDataInserter $insert_variant_data = null;
 
 
 	public function __construct(SessionContainer $session)
@@ -71,18 +76,32 @@ class Inventories implements iModule
 		return $output_fields;
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function run(MysqliWrapper $cxn, PullStats $stats) : void
+	public function prepare(MysqliWrapper $cxn) : ?BulkBase
 	{
 		$prefix = $this->session->settings->get_table_prefix();
 		$this->table_variant = $this->generate_variant_table($cxn, "{$prefix}_inventories_vars");
 
-		$insert_variant = new BatchedDataInserter($cxn, $this->get_variant_inserter($cxn, $this->table_variant));
+		$this->insert_variant_data = new BatchedDataInserter($this->get_variant_inserter($cxn, $this->table_variant));
 
-		$puller = new BulkInventories($this->session);
-		$puller->do_bulk_pull($cxn, null, $insert_variant);
+		$this->puller = new BulkInventories($this->session);
+		return $this->puller;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function run(MysqliWrapper $cxn, PullStats $stats, ?string $bulk_file = null) : void
+	{
+		if ($this->puller === null) {
+			$this->prepare($cxn);
+		}
+
+		if ($bulk_file !== null) {
+			$result = new BulkProcessingResult();
+			$this->puller->process_bulk_file($bulk_file, $result, $cxn, null, $this->insert_variant_data);
+		} else {
+			$this->puller->do_bulk_pull($cxn, null, $this->insert_variant_data);
+		}
 	}
 
 	/**

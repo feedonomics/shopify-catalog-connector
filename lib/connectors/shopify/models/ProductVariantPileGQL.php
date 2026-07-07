@@ -1,12 +1,12 @@
 <?php
 namespace ShopifyConnector\connectors\shopify\models;
 
-use Exception;
+use ShopifyConnector\connectors\shopify\interfaces\iDataList;
 use ShopifyConnector\exceptions\api\UnexpectedResponseException;
 use Generator;
-use ShopifyConnector\connectors\shopify\interfaces\iDataList;
 
 /**
+ * @deprecated
  * Model for a pile of variants returned from a GraphQL query
  */
 final class ProductVariantPileGQL extends PagedGQL implements iDataList

@@ -3,8 +3,8 @@
 namespace ShopifyConnector\connectors\shopify\services;
 
 use ShopifyConnector\api\service\ProductService as clProductService;
-use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\models\ProductPile;
+use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\structs\PullerParams;
 
 /**
@@ -64,3 +64,4 @@ final class ProductService
 	}
 
 }
+

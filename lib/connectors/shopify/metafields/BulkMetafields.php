@@ -6,11 +6,11 @@ use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\models\Metafield;
 use ShopifyConnector\connectors\shopify\pullers\BulkBase;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
-
+use ShopifyConnector\exceptions\ApiResponseException;
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
-
-use ShopifyConnector\exceptions\ApiResponseException;
+use ShopifyConnector\exceptions\InfrastructureErrorException;
+use JsonException;
 
 /**
  * BulkOperation puller for Shopify metafields.
@@ -52,10 +52,7 @@ class BulkMetafields extends BulkBase
 
 		try {
 			$product_id = null;
-			$variant_id = null;
 			$last_pid_data_added_for = null;
-			$last_vid_data_added_for = null;
-			$decoded = null;
 
 			while (!feof($fh)) {
 				$line = $this->checked_read_line($fh, self::MAX_METAFIELD_LINE_LENGTH);
@@ -63,7 +60,6 @@ class BulkMetafields extends BulkBase
 					break;
 				}
 
-				$previous_decoded = $decoded;
 				$decoded = json_decode($line, true, 128, JSON_THROW_ON_ERROR);
 
 				if (empty($decoded['id'])) {
@@ -81,69 +77,66 @@ class BulkMetafields extends BulkBase
 						]);
 					}
 
-					// Ensure at least one row exists in db for previous variant before moving on to next product
-					if ($variant_id !== null && $last_vid_data_added_for !== $variant_id) {
-						$previous_pid = new GID($previous_decoded['__parentId']);
-						$insert_variant->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $variant_id->get_id(),
-							Metafields::COLUMN_PARENT_ID => $previous_pid->get_id(),
-							Metafields::COLUMN_DATA => '',
-						]);
-					}
-
-					$variant_id = null;
 					$product_id = $gid;
 
 				} elseif ($gid->is_variant()) {
-					if ($product_id === null) {
-						// Encountered a variant before a product. This really shouldn't
-						// happen, so would indicate something pretty weird is going on
+					if (empty($decoded['__parentId'])) {
 						throw new ApiResponseException(
 							'Unexpected format in bulk metafields response (v); declining to continue',
 						);
 					}
 
-					// Ensure at least one row exists in db for previous variant before moving on to next variant
-					if ($variant_id !== null && $last_vid_data_added_for !== $variant_id) {
-						$previous_pid = new GID($previous_decoded['__parentId']);
-						$insert_variant->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $variant_id->get_id(),
-							Metafields::COLUMN_PARENT_ID => $previous_pid->get_id(),
-							Metafields::COLUMN_DATA => '',
-						]);
-					}
-
-					$variant_id = $gid;
+					// Always emit a placeholder row for the variant carrying the
+					// variant_id → product_id mapping from its __parentId. This
+					// row is required by resolve_variant_metafield_parents() to
+					// patch metafield rows whose parent_id was deferred, and it
+					// also ensures add_variants_to_product returns the variant
+					// when it has no metafields.
+					$variant_parent_gid = new GID($decoded['__parentId']);
+					$insert_variant->add_value_set($cxn, [
+						Metafields::COLUMN_ID => $gid->get_id(),
+						Metafields::COLUMN_PARENT_ID => $variant_parent_gid->get_id(),
+						Metafields::COLUMN_DATA => '',
+					]);
 
 				} elseif ($gid->is_metafield()) {
-					if ($product_id === null) {
-						// Encountered a metafield before a product. This really shouldn't
-						// happen, so would indicate something pretty weird is going on
+					if ($product_id === null || empty($decoded['__parentId'])) {
+						// Encountered a metafield before a product, or without a
+						// __parentId. This really shouldn't happen, so would
+						// indicate something pretty weird is going on
 						throw new ApiResponseException(
 							'Unexpected format in bulk metafields response (m); declining to continue',
 						);
 					}
 
-					if ($variant_id !== null) {
-						// The current line is a metafield for a variant
+					$parent_gid = new GID($decoded['__parentId']);
+
+					if ($parent_gid->is_variant()) {
+						// Variant metafield. Key off the metafield's __parentId
+						// (the variant) rather than positional state, and defer
+						// the product-id resolution to a post-scan SQL UPDATE —
+						// the variant's product isn't known until we see its
+						// variant line, which may arrive later in the file.
 						$mf = new Metafield($decoded, Metafield::TYPE_VARIANT);
 
 						$insert_variant->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $variant_id->get_id(),
-							Metafields::COLUMN_PARENT_ID => $product_id->get_id(),
+							Metafields::COLUMN_ID => $parent_gid->get_id(),
+							Metafields::COLUMN_PARENT_ID => 0,
 							Metafields::COLUMN_DATA => json_encode($mf),
 						]);
-						$last_vid_data_added_for = $variant_id;
 
-					} else {
-						// The current line is a metafield for a product
+					} elseif ($parent_gid->is_product()) {
 						$mf = new Metafield($decoded, Metafield::TYPE_PRODUCT);
 
 						$insert_product->add_value_set($cxn, [
-							Metafields::COLUMN_ID => $product_id->get_id(),
+							Metafields::COLUMN_ID => $parent_gid->get_id(),
 							Metafields::COLUMN_DATA => json_encode($mf),
 						]);
 						$last_pid_data_added_for = $product_id;
+
+					} else {
+						# Metafield parent isn't a product or variant; skip.
+						continue;
 					}
 
 					if ($mf_split) {

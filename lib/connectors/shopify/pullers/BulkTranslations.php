@@ -2,11 +2,10 @@
 
 namespace ShopifyConnector\connectors\shopify\pullers;
 
-use ShopifyConnector\connectors\shopify\translations\Translations;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\models\Translation;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
-
+use ShopifyConnector\connectors\shopify\translations\Translations;
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 
@@ -97,3 +96,4 @@ class BulkTranslations extends BulkBase
 	}
 
 }
+

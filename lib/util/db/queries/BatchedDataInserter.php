@@ -39,10 +39,9 @@ class BatchedDataInserter
 {
 
 	/**
-	 * @var int The default query size threshold to use if it could not be
-	 * retrieved from the database (1MB)
+	 * @var int The default query size threshold to use (50 MB)
 	 */
-	const DEFAULT_THRESHOLD = 100_000;
+	const DEFAULT_THRESHOLD = 50_000_000;
 
 	/**
 	 * @var int Store for the calculated threshold the query will be
@@ -64,16 +63,12 @@ class BatchedDataInserter
 	 * Helper for mass insertion of records in an efficient, flexible, and safe
 	 * manner
 	 *
-	 * @param MysqliWrapper $cxn A DB connection to leverage
 	 * @param InsertStatement $is The insert statement for writing records
 	 */
-	public function __construct(MysqliWrapper $cxn,InsertStatement $is)
+	public function __construct(InsertStatement $is)
 	{
 		$this->insert_statement = $is;
-
-		$res = $cxn->safe_query('SELECT @@global.max_allowed_packet');
-		$this->query_size_threshold = (int)($res->fetch_row()[0] ?? self::DEFAULT_THRESHOLD);
-		$this->query_size_threshold *= .75; # Add some wiggle room for query sizes (75%)
+		$this->query_size_threshold = self::DEFAULT_THRESHOLD;
 
 		if ($is->get_duplicate_flag() === InsertStatement::FLAG_UPDATE_ON_DUP) {
 			# Account for extra long queries including `ON DUPLICATE UPDATE` statements
@@ -97,7 +92,7 @@ class BatchedDataInserter
 	{
 		$value_size = 0;
 		foreach ($values as $k => $v) {
-			$v = is_array($v) ? json_encode($v) : $v;
+			$v = is_array($v) ? json_encode($v, JSON_UNESCAPED_UNICODE) : $v;
 			$value_size += strlen($v);
 			$values[$k] = $v;
 		}

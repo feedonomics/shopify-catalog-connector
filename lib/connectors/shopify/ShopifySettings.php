@@ -2,14 +2,13 @@
 
 namespace ShopifyConnector\connectors\shopify;
 
+use ShopifyConnector\util\RateLimiter;
 use ShopifyConnector\connectors\shopify\metafields\MetaFilterManager;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\products\ProductFilterManager;
-
-use ShopifyConnector\util\RateLimiter;
 use ShopifyConnector\util\io\InputParser;
-
 use ShopifyConnector\exceptions\ValidationException;
+use ShopifyConnector\validation\ShopifySettingsValidator;
 
 /**
  * The Shopify import settings
@@ -29,13 +28,6 @@ class ShopifySettings
 	public ProductFilterManager $product_filters;
 
 	/**
-	 * @var bool Flag indicating whether GraphQL-specific product filters are in use.
-	 * When true, the product_filters manager uses enhanced GraphQL filter translation.
-	 * @readonly
-	 */
-	public bool $use_gql_product_filters = false;
-
-	/**
 	 * NOTE:
 	 * This and other non-product filter managers will likely only be relevant to a specific
 	 * module, so could be instantiated and managed there rather than here. That would make
@@ -46,6 +38,13 @@ class ShopifySettings
 	 * @readonly
 	 */
 	public MetaFilterManager $meta_filters;
+
+	/**
+	 * @var bool Flag indicating whether GraphQL-specific product filters are in use.
+	 * When true, the product_filters manager uses enhanced GraphQL filter translation.
+	 * @readonly
+	 */
+	public bool $use_gql_product_filters = false;
 
 	/**
 	 * @var RateLimiter[] Named array of rate limiters for various apis
@@ -144,6 +143,7 @@ class ShopifySettings
 	public function __construct(array $client_options)
 	{
 		self::adjust_params($client_options);
+		ShopifySettingsValidator::validate($client_options);
 
 		$this->parse_options_into_fields($client_options);
 
@@ -151,15 +151,16 @@ class ShopifySettings
 		if ($this->use_gql_product_filters) {
 			$this->product_filters = new ProductFilterManager(
 				$client_options['gql_product_filters'],
-				$client_options['product_published_status'] ?? 'published', // Legacy option for fallback, or default "published"
+				$client_options['product_published_status'] ?? 'published',
 				true
 			);
 		} else {
 			$this->product_filters = new ProductFilterManager(
 				$client_options['product_filters'] ?? [],
-				$client_options['product_published_status'] ?? 'published' // Legacy option for fallback, or default "published"
+				$client_options['product_published_status'] ?? 'published'
 			);
 		}
+
 		$this->meta_filters = new MetaFilterManager($client_options['meta_filters'] ?? []);
 
 		$this->raw_client_options = $client_options;
@@ -227,6 +228,9 @@ class ShopifySettings
 
 		$this->tax_rates = $client_options['tax_rates'] ?? '';
 
+		// Set GraphQL product filters mode flag
+		$this->use_gql_product_filters = !empty($client_options['gql_product_filters']);
+
 		foreach (explode(',', $client_options['extra_parent_fields'] ?? '') as $field) {
 			$field = trim($field);
 			if (!empty($field)) {
@@ -255,9 +259,6 @@ class ShopifySettings
 		$this->contextual_pricing_locations = $client_options['contextual_pricing_locations'] ?? [];
 		$this->contextual_pricing_country_aliases = $this->build_contextual_pricing_country_aliases();
 		$this->contextual_pricing_location_aliases = $this->build_contextual_pricing_location_aliases();
-
-		// Set GraphQL product filters mode flag
-		$this->use_gql_product_filters = !empty($client_options['gql_product_filters']);
 	}
 
 	/**
@@ -414,9 +415,7 @@ class ShopifySettings
 			$loc_id = trim($loc_values[0]);
 			$loc_name = preg_replace('/[\W]+/', '_', trim($loc_values[1]));
 
-			if ($loc_id === '') {
-				continue;
-			}
+			if ($loc_id === '') continue;
 			if ($loc_name === '') {
 				$loc_name = 'Location';
 			}

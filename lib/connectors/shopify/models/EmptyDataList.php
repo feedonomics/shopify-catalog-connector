@@ -1,10 +1,11 @@
 <?php
 namespace ShopifyConnector\connectors\shopify\models;
 
-use Generator;
 use ShopifyConnector\connectors\shopify\interfaces\iDataList;
+use Generator;
 
 /**
+ * @deprecated
  * An empty data list
  */
 class EmptyDataList implements iDataList

@@ -2,13 +2,13 @@
 
 namespace ShopifyConnector\connectors\shopify\models;
 
-use ShopifyConnector\exceptions\api\UnexpectedResponseException;
+use ShopifyConnector\exceptions\ApiResponseException;
 use ShopifyConnector\util\io\DataUtilities;
 
 /**
  * Model for a Shopify product.
  */
-final class Product extends FieldHaver
+class Product extends FieldHaver
 {
 
 	/**
@@ -91,6 +91,7 @@ final class Product extends FieldHaver
 	 * Parse and store the raw product data
 	 *
 	 * @param array $product_data Map of data for this product
+	 * @throws ApiResponseException
 	 */
 	public function __construct(array $product_data)
 	{
@@ -127,7 +128,7 @@ final class Product extends FieldHaver
 	 *
 	 * @param string $field The name of the field to get the processed value for
 	 * @return mixed The processed value for the specified field
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_processed_value(string $field) : mixed
 	{
@@ -144,7 +145,7 @@ final class Product extends FieldHaver
 				return $this->get('productType', '');
 
 			case 'tags':
-				return implode(', ', $this->get('tags', []));
+				return $this->get_tags();
 
 			case 'published_status':
 				return $this->get_published_status();
@@ -215,25 +216,25 @@ final class Product extends FieldHaver
 	 * published value
 	 *
 	 * @return string The published status
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_published_status() : string
 	{
 		return $this->get('published_status') ?? is_null($this->get('publishedAt'))
 			? 'unpublished'
-			: 'published'
-		;
+			: 'published';
 	}
 
 	/**
 	 * Get publications associated with a product and return them as an array.
 	 *
 	 * @return string The json encoded publications array
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_publications() : string
 	{
 		$publications = $this->get(Field::PUBLICATIONS->value);
+
 		return $publications ? json_encode($publications) : '';
 	}
 
@@ -262,7 +263,7 @@ final class Product extends FieldHaver
 	 *
 	 *
 	 * @return string The image link
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_image_link() : string
 	{
@@ -276,7 +277,7 @@ final class Product extends FieldHaver
 	 * TODO: This and other image-related things need to be updated for GQL
 	 *
 	 * @return string The list of additional links
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_image_links() : string
 	{
@@ -294,7 +295,7 @@ final class Product extends FieldHaver
 	 * Get the first video link for this product.
 	 *
 	 * @return string The video link, or empty string if none
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_video_link() : string
 	{
@@ -306,7 +307,7 @@ final class Product extends FieldHaver
 	 * Get a comma-separated list of video links for this product.
 	 *
 	 * @return string The list of video links
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_video_links() : string
 	{
@@ -386,7 +387,7 @@ final class Product extends FieldHaver
 	 * @deprecated TODO: Remove after ensuring nothing is needed from this
 	 *
 	 * @return ProductVariant[] The list of this product's variants as ProductVariant objects
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function getVariants_old() : array
 	{
@@ -416,7 +417,7 @@ final class Product extends FieldHaver
 	 *
 	 * @param string $name The name of the option
 	 * @return array|null The value of the option
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_option_by_name(string $name) : ?array
 	{
@@ -427,7 +428,7 @@ final class Product extends FieldHaver
 	 * Get all options for this product
 	 *
 	 * @return array The array of product options
-	 * @throws UnexpectedResponseException On invalid data
+	 * @throws ApiResponseException On invalid data
 	 */
 	public function get_options() : array
 	{
@@ -441,11 +442,19 @@ final class Product extends FieldHaver
 				}
 				$this->option_map[strtolower($opt['name'])] = $opt;
 			}
-
 		}
 
 		return $this->option_map;
 	}
 
+	/**
+	 * GraphQL formats tags as an array, convert to csv before return
+	 *
+	 * @return string
+	 * @throws ApiResponseException
+	 */
+	protected function get_tags() : string
+	{
+		return implode(', ', $this->get('tags', []));
+	}
 }
-

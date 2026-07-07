@@ -5,7 +5,6 @@ namespace ShopifyConnector\connectors\shopify\pullers;
 use ShopifyConnector\connectors\shopify\collections\Collections;
 use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
-
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
 
@@ -14,6 +13,13 @@ use ShopifyConnector\util\db\queries\BatchedDataInserter;
  */
 class BulkCollections extends BulkBase
 {
+	/**
+	 * @var int Upper limit on length of lines when reading the bulk collections
+	 * file. Collection metafields can carry large `value` payloads, so this is
+	 * sized to match the metafields puller rather than the smaller default.
+	 */
+	const MAX_COLLECTION_LINE_LENGTH = 5_250_000;
+
 	/**
 	 *
 	 * @inheritDoc
@@ -79,7 +85,7 @@ class BulkCollections extends BulkBase
 			$product_collections = [];
 
 			while (!feof($fh)) {
-				$line = $this->checked_read_line($fh);
+				$line = $this->checked_read_line($fh, self::MAX_COLLECTION_LINE_LENGTH);
 				if ($line === null) {
 					break;
 				}
@@ -151,3 +157,4 @@ class BulkCollections extends BulkBase
 		}
 	}
 }
+

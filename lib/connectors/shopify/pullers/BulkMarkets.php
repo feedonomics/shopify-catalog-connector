@@ -7,9 +7,9 @@ use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\publications\Markets;
 use ShopifyConnector\connectors\shopify\structs\BulkProcessingResult;
 use ShopifyConnector\exceptions\ApiResponseException;
-use ShopifyConnector\exceptions\InfrastructureErrorException;
 use ShopifyConnector\util\db\MysqliWrapper;
 use ShopifyConnector\util\db\queries\BatchedDataInserter;
+use ShopifyConnector\exceptions\InfrastructureErrorException;
 
 class BulkMarkets extends BulkBase
 {
@@ -23,16 +23,16 @@ class BulkMarkets extends BulkBase
 					node {
 						id
 						resourcePublicationsV2(catalogType: MARKET) {
-							edges {
-								node {
-									publication {
-										catalog {
-											id
-											title
-										}
-									}
+						  edges {
+							node {
+							  publication {
+								catalog {
+								  id
+								  title
 								}
+							  }
 							}
+						  }
 						}
 					}
 				}

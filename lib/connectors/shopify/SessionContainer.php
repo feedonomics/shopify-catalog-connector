@@ -51,9 +51,9 @@ final class SessionContainer
 	public array $pull_stats = [];
 
 	/**
-	 * @var string|null Store for the current bulk ID
+	 * @var array<string, true> Store for all currently-tracked bulk operation IDs
 	 */
-	private ?string $current_bulk_id = null;
+	private array $current_bulk_ids = [];
 
 	/**
 	 * @var int Flag for what stage the run is in
@@ -91,13 +91,49 @@ final class SessionContainer
 	}
 
 	/**
-	 * Set the current bulk operation id. The value supplied should be a Shopify GID string
+	 * Track a bulk operation ID for shutdown cleanup.
 	 *
-	 * @param ?string $gid The current gid for running bulk operation
+	 * @param string $gid The Shopify GID for a running bulk operation
 	 */
-	public function set_current_bulk_id(?string $gid) : void
+	public function add_bulk_id(string $gid) : void
 	{
-		$this->current_bulk_id = $gid;
+		$this->current_bulk_ids[$gid] = true;
+	}
+
+	/**
+	 * Stop tracking a bulk operation ID (e.g. after it completes normally).
+	 *
+	 * @param string $gid The Shopify GID to remove
+	 */
+	public function remove_bulk_id(string $gid) : void
+	{
+		unset($this->current_bulk_ids[$gid]);
+	}
+
+	/**
+	 * Cancel a single bulk operation via the Shopify API and stop tracking it.
+	 * Failures of the cancel mutation are logged but do not throw, so callers
+	 * can use this in cleanup paths without compounding errors.
+	 *
+	 * @param string $gid The Shopify GID for the bulk operation to cancel
+	 */
+	public function cancel_bulk_operation(string $gid) : void
+	{
+		try {
+			$this->client->graphql_request(<<<GRAPHQL
+				mutation {
+					bulkOperationCancel(id: "{$gid}") {
+						bulkOperation {
+							status
+						}
+					}
+				}
+				GRAPHQL
+			);
+		} catch (\Exception $e) {
+			ErrorLogger::log_error('Bulk operation cancel failed for ' . $gid . ': ' . $e->getMessage());
+		}
+		$this->remove_bulk_id($gid);
 	}
 
 	/**
@@ -168,28 +204,15 @@ final class SessionContainer
 	}
 
 	/**
-	 * This is to clear bulk queries so processes can be retried
-	 * Canceling has no effect on completed or failed queries
-	 *
-	 * @throws ApiException
+	 * Shutdown handler for the run: cancels every still-tracked bulk operation
+	 * so a crash or fatal does not leave bulk queries running on the shop.
+	 * Cancelling has no effect on completed or failed queries.
 	 */
 	private function cleanup_bulk_operation() : void
 	{
-		if ($this->current_bulk_id !== null) {
-			try {
-				$this->client->graphql_request(<<<GRAPHQL
-					mutation {
-						bulkOperationCancel(id: "{$this->current_bulk_id}") {
-							bulkOperation {
-								status
-							}
-						}
-					}
-					GRAPHQL
-				);
-			} catch (\Exception $e) {
-				ErrorLogger::log_error('Bulk operation cleanup failed: ' . $e->getMessage());
-			}
+		foreach (array_keys($this->current_bulk_ids) as $bulk_id) {
+			$this->cancel_bulk_operation($bulk_id);
 		}
 	}
+
 }

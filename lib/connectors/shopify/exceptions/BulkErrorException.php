@@ -4,12 +4,9 @@ namespace ShopifyConnector\connectors\shopify\exceptions;
 
 use ShopifyConnector\exceptions\ApiResponseException;
 
-
 class BulkErrorException extends ApiResponseException
 {
-
 	private array $errors;
-
 
 	public function __construct(array $errors, string $msg = '')
 	{
