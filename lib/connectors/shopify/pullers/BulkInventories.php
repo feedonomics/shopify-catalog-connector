@@ -38,7 +38,6 @@ class BulkInventories extends BulkBase
 											fulfillmentService {
 												handle
 												inventoryManagement
-												permitsSkuSharing
 												serviceName
 												type
 											}
