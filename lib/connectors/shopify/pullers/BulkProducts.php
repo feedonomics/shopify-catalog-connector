@@ -171,11 +171,6 @@ class BulkProducts extends BulkBase
 				}
 			GQL;
 		}
-
-		//variant.taxCode is deprecated as of version 2025-10
-		//https://shopify.dev/changelog/deprecation-of-tax-code-field
-		//https://shopify.dev/docs/api/admin-graphql/latest/objects/ProductVariant#field-ProductVariant.fields.taxCode
-
 		return <<<GQL
 			products{$prod_search_str} {
 				edges {
@@ -300,7 +295,6 @@ class BulkProducts extends BulkBase
 									sellableOnlineQuantity
 									sku
 									taxable
-									taxCode
 									title
 									updatedAt
 								}

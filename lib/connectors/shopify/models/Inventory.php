@@ -130,17 +130,10 @@ final class Inventory extends FieldHaver
 	 */
 	private function get_fulfillment_service(): string
 	{
-		$levels = $this->get('levels');
-		if (
-			count($levels) === 1 &&
-			$levels[0]['fulfillment_service'] !== "" &&
-			$levels[0]['fulfillment_service']['handle'] === 'THIRD_PARTY' &&
-			$levels[0]['fulfillment_service']['permitsSkuSharing'] === false
-		) {
-				return $levels[0]['fulfillment_service']['handle'];
-			} else {
-				return 'manual';
-			}
+		// Shopify removed permitsSkuSharing in API 2026-04 and enabled SKU
+		// sharing for all fulfillment services, so this branch can no longer
+		// fire — third-party handles are never surfaced anymore.
+		return 'manual';
 	}
 
 	/**
