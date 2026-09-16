@@ -35,6 +35,7 @@ class BulkProducts extends BulkBase
 		# Comments on fields note their names in the REST API when different
 		$product_fields = [
 			'descriptionHtml', # body_html
+			'category', # native Standard Product Taxonomy category
 			'createdAt', # created_at
 			'handle',
 			'media', # images
@@ -222,6 +223,12 @@ class BulkProducts extends BulkBase
 									}
 								}
 							}
+						}
+
+						category {
+							id
+							name
+							fullName
 						}
 
 						onlineStorePreviewUrl
