@@ -45,6 +45,7 @@ class Product extends FieldHaver
 		'additional_image_link',
 		'video_link',
 		'additional_video_link',
+		'shopify_category',
 		Field::PUBLICATIONS->value
 	];
 
@@ -161,6 +162,9 @@ class Product extends FieldHaver
 
 			case 'additional_video_link':
 				return $this->get_video_links();
+
+			case 'shopify_category':
+				return $this->get_shopify_category();
 
 			/* IDs are currently being handled not as GIDs internally
 			case 'id':
@@ -319,6 +323,20 @@ class Product extends FieldHaver
 			$video_data,
 			'src'
 		)));
+	}
+
+	/**
+	 * Get the native taxonomy category as its full path, for example
+	 * "Apparel & Accessories > Clothing > Shirts". Unassigned products come
+	 * back with a null `category`.
+	 *
+	 * @return string The full taxonomy path, or empty string if none
+	 */
+	public function get_shopify_category() : string
+	{
+		$category = $this->get('category') ?? [];
+
+		return $category['fullName'] ?? '';
 	}
 
 	/**

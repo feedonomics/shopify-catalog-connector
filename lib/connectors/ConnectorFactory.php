@@ -37,6 +37,15 @@ class ConnectorFactory {
 			);
 		}
 
+		# Callers that reach us through a job-queue wrapper cannot set file_info: the wrapper builds
+		# it and forwards only connection_info verbatim. Without this they are stuck with the
+		# default product pull and cannot ask for the shop-info request type at all. file_info
+		# still wins when it carries a value, so callers hitting run_preprocess.php or the CLI
+		# directly are unaffected. An unrecognised value is rejected later by BaseConnector::run().
+		if (empty($file_info['request_type']) && !empty($conn_info['request_type'])) {
+			$file_info['request_type'] = $conn_info['request_type'];
+		}
+
 		return new $connector($conn_info, $file_info);
 	}
 
