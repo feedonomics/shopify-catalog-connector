@@ -4,9 +4,11 @@ namespace ShopifyConnector\connectors\shopify;
 
 use ShopifyConnector\connectors\shopify\ShopifySettings;
 use ShopifyConnector\connectors\shopify\models\AccessScopes;
+use ShopifyConnector\connectors\shopify\models\GID;
 use ShopifyConnector\connectors\shopify\models\Shop;
 use ShopifyConnector\connectors\shopify\structs\PullStats;
 use ShopifyConnector\connectors\shopify\services\AccessService;
+use ShopifyConnector\connectors\shopify\services\PublicationService;
 use ShopifyConnector\connectors\shopify\services\ShopService;
 
 use ShopifyConnector\exceptions\ApiException;
@@ -64,6 +66,11 @@ final class SessionContainer
 	 * @var AccessScopes The access scopes available to the app/token
 	 */
 	private AccessScopes $access_scopes;
+
+	/**
+	 * @var GID|false|null The shop's Online Store publication; false once looked up and absent
+	 */
+	private GID|false|null $online_store_publication = null;
 
 	/**
 	 * Container class for the various dependencies, helpers, etc that are used
@@ -201,6 +208,23 @@ final class SessionContainer
 	{
 		$this->access_scopes ??= AccessService::get_access_scopes($this);
 		return $this->access_scopes;
+	}
+
+	/**
+	 * The shop's Online Store publication, looked up once per run. This is the
+	 * single gate for the variant published column and its query field.
+	 *
+	 * @return ?GID Null without read_publications or an Online Store channel
+	 * @throws ApiException
+	 * @throws ApiResponseException
+	 */
+	public function get_online_store_publication() : ?GID
+	{
+		$this->online_store_publication ??= $this->get_access_scopes()->has_scope('read_publications')
+			? (PublicationService::get_online_store_publication($this) ?? false)
+			: false;
+
+		return $this->online_store_publication ?: null;
 	}
 
 	/**
