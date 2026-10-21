@@ -172,6 +172,14 @@ class BulkProducts extends BulkBase
 				}
 			GQL;
 		}
+
+		// A scalar, so it doesn't count toward Shopify's 5-connection bulk limit
+		$variant_published = '';
+		$online_store = $this->session->get_online_store_publication();
+		if ($online_store !== null) {
+			$variant_published = "publishedOnPublication(publicationId: \"{$online_store->get_gid()}\")";
+		}
+
 		return <<<GQL
 			products{$prod_search_str} {
 				edges {
@@ -304,6 +312,7 @@ class BulkProducts extends BulkBase
 									taxable
 									title
 									updatedAt
+									{$variant_published}
 								}
 							}
 						}

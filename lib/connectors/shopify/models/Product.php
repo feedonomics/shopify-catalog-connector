@@ -211,6 +211,8 @@ class Product extends FieldHaver
 		return match ($field) {
 			Field::MARKETS => $this->get_markets(),
 			Field::PUBLICATIONS => $this->get_publications(),
+			// Variant-only; null leaves the column to the variant
+			Field::VARIANT_PUBLISHED_ONLINE_STORE => null,
 		};
 	}
 

@@ -4,6 +4,7 @@ namespace ShopifyConnector\connectors\shopify\products;
 
 use ShopifyConnector\connectors\shopify\SessionContainer;
 use ShopifyConnector\connectors\shopify\interfaces\iModule;
+use ShopifyConnector\connectors\shopify\models\Field;
 use ShopifyConnector\connectors\shopify\models\Product;
 use ShopifyConnector\connectors\shopify\models\ProductVariant;
 use ShopifyConnector\connectors\shopify\pullers\BulkBase;
@@ -92,6 +93,10 @@ class Products implements iModule
 			}
 			if ($this->session->settings->include_presentment_prices) {
 				$output_fields[] = 'presentment_prices';
+			}
+			// Same gate as the query field, so the column never ships without data
+			if ($this->session->get_online_store_publication() !== null) {
+				$output_fields[] = Field::VARIANT_PUBLISHED_ONLINE_STORE->value;
 			}
 
 			if ($this->session->settings->variant_names_split_columns) {

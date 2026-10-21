@@ -230,6 +230,9 @@ class ProductVariant extends FieldHaver
 			case 'tax_rates':
 				return SessionContainer::get_active_session()->shop->tax_rates_json ?? '';
 
+			case Field::VARIANT_PUBLISHED_ONLINE_STORE->value:
+				return $this->get_published_online_store();
+
 			// Give metafields priority over any potential "variant_meta" option fields
 			case 'variant_meta':
 				$vm = $this->get('variant_meta');
@@ -246,6 +249,19 @@ class ProductVariant extends FieldHaver
 		}
 
 		return $this->get($field);
+	}
+
+	/**
+	 * Whether this variant is published to the Online Store sales channel.
+	 *
+	 * @return ?string 'true'/'false', or null if the field wasn't pulled
+	 * @throws ApiResponseException On invalid data
+	 */
+	public function get_published_online_store() : ?string
+	{
+		$published = $this->get('publishedOnPublication');
+
+		return $published === null ? null : ($published ? 'true' : 'false');
 	}
 
 	/**
